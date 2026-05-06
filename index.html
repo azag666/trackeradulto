@@ -1689,13 +1689,17 @@
                     wrap.innerHTML = `<div class="col-span-full p-6 text-center text-slate-500">Nenhum ad nesta campanha.</div>`;
                     return;
                 }
-                // statsRaw é [{ "<ad_id>": { impressions, clicks, ... } }]
+                // statsRaw: cada item é flat { ad_id, impressions, clicks, ctr, ecpm, ecpc, conversions, revenue, iframes }
                 const statsByAd = {};
                 const arr = Array.isArray(statsRaw) ? statsRaw : (statsRaw?.data || []);
                 arr.forEach(item => {
                     if (!item || typeof item !== 'object') return;
+                    if (item.ad_id != null && ('impressions' in item || 'clicks' in item)) {
+                        statsByAd[String(item.ad_id)] = item;
+                        return;
+                    }
                     Object.entries(item).forEach(([adId, s]) => {
-                        if (s && typeof s === 'object') statsByAd[String(adId)] = s;
+                        if (s && typeof s === 'object' && ('impressions' in s || 'clicks' in s)) statsByAd[String(adId)] = s;
                     });
                 });
 
@@ -1972,7 +1976,11 @@
                             const ads = Array.isArray(adsR.value) ? adsR.value : (adsR.value?.data || adsR.value?.ads || []);
                             const statsArr = (statsR.status === 'fulfilled' ? statsR.value : []) || [];
                             const sm = {};
-                            (Array.isArray(statsArr) ? statsArr : []).forEach(it => Object.entries(it||{}).forEach(([k2,v]) => { if (v && typeof v==='object') sm[String(k2)] = v; }));
+                            (Array.isArray(statsArr) ? statsArr : []).forEach(it => {
+                                if (!it || typeof it !== 'object') return;
+                                if (it.ad_id != null && ('impressions' in it || 'clicks' in it)) { sm[String(it.ad_id)] = it; return; }
+                                Object.entries(it).forEach(([k2,v]) => { if (v && typeof v==='object' && ('impressions' in v || 'clicks' in v)) sm[String(k2)] = v; });
+                            });
                             ads.forEach(a => all.push({ ad: a, stats: sm[String(a.ad_id)], camp: campaignsCache[id] }));
                         });
                     }
@@ -1987,7 +1995,11 @@
                     const ads = Array.isArray(raw) ? raw : (raw?.data || raw?.ads || []);
                     if (!ads || ads.length === 0) { grid.innerHTML = `<div class="col-span-full py-20 text-center text-slate-500">Sem ads nessa campanha.</div>`; return; }
                     const sm = {};
-                    (Array.isArray(statsRaw) ? statsRaw : []).forEach(it => Object.entries(it||{}).forEach(([k,v]) => { if (v && typeof v==='object') sm[String(k)] = v; }));
+                    (Array.isArray(statsRaw) ? statsRaw : []).forEach(it => {
+                        if (!it || typeof it !== 'object') return;
+                        if (it.ad_id != null && ('impressions' in it || 'clicks' in it)) { sm[String(it.ad_id)] = it; return; }
+                        Object.entries(it).forEach(([k,v]) => { if (v && typeof v==='object' && ('impressions' in v || 'clicks' in v)) sm[String(k)] = v; });
+                    });
                     grid.innerHTML = ads.map(a => renderAdCard(a, sm[String(a.ad_id)])).join('');
                     lucide.createIcons();
                 }
@@ -2258,8 +2270,14 @@
                             const m = {};
                             arr.forEach(item => {
                                 if (!item || typeof item !== 'object') return;
+                                // Doc TJ: cada item é flat { ad_id, impressions, clicks, ctr, ecpm, ecpc, conversions, revenue, iframes }
+                                if (item.ad_id != null && ('impressions' in item || 'clicks' in item || 'cost' in item)) {
+                                    m[String(item.ad_id)] = item;
+                                    return;
+                                }
+                                // Fallback: nested { "<ad_id>": {...stats} }
                                 Object.entries(item).forEach(([adId, s]) => {
-                                    if (s && typeof s === 'object') m[String(adId)] = s;
+                                    if (s && typeof s === 'object' && ('impressions' in s || 'clicks' in s)) m[String(adId)] = s;
                                 });
                             });
                             adStatsByCamp[cid] = m;
