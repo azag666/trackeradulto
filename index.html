@@ -3,20 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Traffic Monitor | TJ Stats Pro</title>
+    <title>Traffic Monitor | Command Center</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        /* Custom scrollbar para a tabela não ficar feia no Windows */
         ::-webkit-scrollbar { height: 8px; width: 8px; }
         ::-webkit-scrollbar-track { background: #111827; }
         ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #4B5563; }
+        .toast-enter { animation: slideIn 0.3s ease-out forwards; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
     </style>
 </head>
 <body class="bg-gray-950 text-gray-100 p-6 font-sans selection:bg-indigo-500/30 min-h-screen">
+
+    <!-- Container de Notificações (Toasts) -->
+    <div id="toast-container" class="fixed top-6 right-6 z-[100] flex flex-col gap-3"></div>
 
     <div class="max-w-[1600px] mx-auto space-y-6">
         
@@ -24,113 +28,151 @@
         <header class="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-gray-800">
             <div>
                 <h1 class="text-3xl font-bold flex items-center gap-2 text-white">
-                    <i data-lucide="activity" class="text-indigo-500 w-8 h-8"></i>
-                    Traffic Monitor <span class="text-gray-500 font-light text-2xl">| TJ Stats Pro</span>
+                    <i data-lucide="crosshair" class="text-indigo-500 w-8 h-8"></i>
+                    Traffic Monitor <span class="text-gray-500 font-light text-2xl">| Command Center</span>
                 </h1>
                 <p class="text-sm text-gray-400 mt-1" id="subtitle-dates">
-                    Dashboard Master: Todas as métricas extraídas em tempo real
+                    Gestão Ativa: Controle total de Bids, Ads e Campanhas
                 </p>
             </div>
             <div class="mt-4 md:mt-0 flex flex-col md:flex-row items-end md:items-center gap-4">
-                <span id="cors-warning" class="hidden text-xs bg-yellow-500/10 text-yellow-500 px-3 py-1 rounded-full border border-yellow-500/20 flex items-center gap-1">
-                    <i data-lucide="alert-circle" class="w-4 h-4"></i> Modo Simulado Ativo
-                </span>
-                
-                <select 
-                    id="date-filter" 
-                    onchange="fetchTJData()"
-                    class="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none transition-colors font-medium shadow-lg"
-                >
+                <select id="date-filter" onchange="fetchTJData()" class="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none font-medium shadow-lg">
                     <option value="today" selected>Hoje</option>
                     <option value="yesterday">Ontem</option>
                     <option value="7days">Últimos 7 Dias</option>
                     <option value="30days">Últimos 30 Dias</option>
                 </select>
-
-                <button 
-                    onclick="fetchTJData()"
-                    id="refresh-btn"
-                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 disabled:opacity-50 shadow-lg shadow-indigo-900/20"
-                >
-                    <i data-lucide="refresh-cw" id="refresh-icon" class="w-4 h-4"></i>
-                    Sincronizar
+                <button onclick="fetchTJData()" id="refresh-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 shadow-lg shadow-indigo-900/20">
+                    <i data-lucide="refresh-cw" id="refresh-icon" class="w-4 h-4"></i> Sincronizar
                 </button>
             </div>
         </header>
 
-        <!-- Cards de Resumo (Expandido para 5 colunas) -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+        <!-- Cards (Mantidos compactos para dar espaço à gestão) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-lg">
                 <p class="text-gray-400 text-sm font-medium mb-1">Gasto Total (USD)</p>
                 <div class="flex justify-between items-end">
                     <h3 id="total-cost" class="text-2xl font-bold text-emerald-400">$ 0,00</h3>
-                    <i data-lucide="dollar-sign" class="text-emerald-500/30 w-8 h-8"></i>
                 </div>
             </div>
-
             <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-lg">
                 <p class="text-gray-400 text-sm font-medium mb-1">Total Impressões</p>
                 <div class="flex justify-between items-end">
                     <h3 id="total-impressions" class="text-2xl font-bold text-white">0</h3>
-                    <i data-lucide="eye" class="text-blue-500/30 w-8 h-8"></i>
                 </div>
             </div>
-
-            <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-lg">
-                <p class="text-gray-400 text-sm font-medium mb-1">Total Cliques</p>
-                <div class="flex justify-between items-end">
-                    <h3 id="total-clicks" class="text-2xl font-bold text-white">0</h3>
-                    <i data-lucide="mouse-pointer-click" class="text-indigo-500/30 w-8 h-8"></i>
-                </div>
-            </div>
-
             <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-lg border-b-2 border-b-purple-500">
                 <p class="text-gray-400 text-sm font-medium mb-1">Video Plays (CTV)</p>
                 <div class="flex justify-between items-end">
                     <h3 id="total-plays" class="text-2xl font-bold text-purple-400">0</h3>
-                    <i data-lucide="play-circle" class="text-purple-500/30 w-8 h-8"></i>
                 </div>
             </div>
-
             <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-lg border-b-2 border-b-orange-500">
                 <p class="text-gray-400 text-sm font-medium mb-1">Conversões (TJ)</p>
                 <div class="flex justify-between items-end">
                     <h3 id="total-conversions" class="text-2xl font-bold text-orange-400">0</h3>
-                    <i data-lucide="target" class="text-orange-500/30 w-8 h-8"></i>
                 </div>
             </div>
         </div>
 
-        <!-- Tabela de Dados Master -->
+        <!-- Tabela Principal -->
         <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden shadow-2xl">
-            <div class="p-5 border-b border-gray-800 bg-gray-900/80 flex justify-between items-center">
-                <h2 class="text-lg font-semibold text-gray-200 flex items-center gap-2">
-                    <i data-lucide="bar-chart-2" class="text-gray-400"></i> Relatório Master de Campanhas
-                </h2>
-                <span class="text-xs text-gray-500 font-mono">Deslize horizontalmente para ver tudo &rarr;</span>
-            </div>
-            
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-sm whitespace-nowrap">
                     <thead class="bg-gray-950/80 text-gray-400 uppercase tracking-wider text-xs border-b border-gray-800">
                         <tr>
-                            <th class="px-6 py-4 font-medium">Campanha & Tipo</th>
-                            <th class="px-6 py-4 font-medium">Estrutura (Ads/Spots)</th>
+                            <th class="px-6 py-4 font-medium">Campanha</th>
                             <th class="px-6 py-4 font-medium">Gasto (USD)</th>
-                            <th class="px-6 py-4 font-medium text-right">Volume (Imp / Cliques)</th>
-                            <th class="px-6 py-4 font-medium text-center bg-purple-900/10 border-x border-gray-800">Métricas de Vídeo (CTV)</th>
-                            <th class="px-6 py-4 font-medium text-right">Custos (eCPM / eCPC)</th>
+                            <th class="px-6 py-4 font-medium text-right">Volume</th>
+                            <th class="px-6 py-4 font-medium text-right">Custos (eCPM)</th>
                             <th class="px-6 py-4 font-medium text-center">Performance</th>
+                            <th class="px-6 py-4 font-medium text-center text-indigo-400">Gerenciamento</th>
                         </tr>
                     </thead>
                     <tbody id="table-body" class="divide-y divide-gray-800/50">
-                        <tr>
-                            <td colspan="7" class="px-6 py-12 text-center text-gray-500">
-                                Aguardando sincronização...
-                            </td>
-                        </tr>
+                        <tr><td colspan="6" class="px-6 py-12 text-center text-gray-500">Sincronizando...</td></tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE GESTÃO DA CAMPANHA -->
+    <div id="manage-modal" class="fixed inset-0 bg-black/80 z-50 hidden flex justify-center items-start pt-10 pb-10 overflow-y-auto">
+        <div class="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-5xl shadow-2xl mx-4 flex flex-col">
+            
+            <!-- Modal Header -->
+            <div class="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950/50 rounded-t-xl">
+                <div>
+                    <h2 id="modal-title" class="text-2xl font-bold text-white flex items-center gap-2">
+                        <i data-lucide="settings"></i> Gerenciar Campanha
+                    </h2>
+                    <p id="modal-subtitle" class="text-gray-400 text-sm mt-1 font-mono">ID: ---</p>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button id="btn-pause-campaign" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-gray-700 flex items-center gap-2">
+                        Aguarde...
+                    </button>
+                    <button onclick="closeModal()" class="text-gray-500 hover:text-white transition-colors">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Body (Carregando) -->
+            <div id="modal-loading" class="p-16 flex flex-col items-center justify-center text-gray-400">
+                <i data-lucide="loader-2" class="animate-spin w-10 h-10 mb-4 text-indigo-500"></i>
+                <p>Buscando Bids e Ads diretamente da TrafficJunky...</p>
+            </div>
+
+            <!-- Modal Body (Conteúdo) -->
+            <div id="modal-content" class="p-6 space-y-8 hidden">
+                
+                <!-- Secção de BIDS -->
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-200 mb-3 flex items-center gap-2">
+                        <i data-lucide="dollar-sign" class="text-emerald-400"></i> Gestão de Bids (Lances)
+                    </h3>
+                    <div class="bg-gray-950 rounded-lg border border-gray-800 overflow-hidden">
+                        <table class="w-full text-left text-sm whitespace-nowrap">
+                            <thead class="bg-gray-900 text-gray-400 text-xs uppercase border-b border-gray-800">
+                                <tr>
+                                    <th class="px-4 py-3">Bid ID</th>
+                                    <th class="px-4 py-3">Tipo / Spot ID</th>
+                                    <th class="px-4 py-3">Lance Atual</th>
+                                    <th class="px-4 py-3">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bids-body" class="divide-y divide-gray-800">
+                                <!-- Bids preenchidos via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Secção de ADS -->
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-200 mb-3 flex items-center gap-2">
+                        <i data-lucide="image" class="text-purple-400"></i> Gestão de Ads (Criativos)
+                    </h3>
+                    <div class="bg-gray-950 rounded-lg border border-gray-800 overflow-hidden">
+                        <table class="w-full text-left text-sm whitespace-nowrap">
+                            <thead class="bg-gray-900 text-gray-400 text-xs uppercase border-b border-gray-800">
+                                <tr>
+                                    <th class="px-4 py-3">Ad ID</th>
+                                    <th class="px-4 py-3">Nome / Target URL</th>
+                                    <th class="px-4 py-3 text-center">Status</th>
+                                    <th class="px-4 py-3 text-right">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ads-body" class="divide-y divide-gray-800">
+                                <!-- Ads preenchidos via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
@@ -141,51 +183,79 @@
 
         const TJ_TOKEN = '0a5cae844058508f0f70eee015ac6d3a8adfbd670fe1c60f7ac3c3f6f1b51fe975ce183c79f2ac31168cd7fed358165736c9b24fb65cf490f8fcd77549b20691';
 
+        // Formatadores
         const formatCurrency = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
         const formatMicro = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 3, maximumFractionDigits: 4 }).format(value);
         const formatNumber = (value) => new Intl.NumberFormat('pt-BR').format(value);
 
+        // --- SISTEMA DE TOAST (Notificações) ---
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const isSuccess = type === 'success';
+            
+            toast.className = `toast-enter flex items-center gap-3 px-4 py-3 rounded-lg shadow-xl border ${isSuccess ? 'bg-emerald-900/90 border-emerald-500/50 text-emerald-100' : 'bg-red-900/90 border-red-500/50 text-red-100'}`;
+            toast.innerHTML = `
+                <i data-lucide="${isSuccess ? 'check-circle' : 'alert-octagon'}" class="w-5 h-5 ${isSuccess ? 'text-emerald-400' : 'text-red-400'}"></i>
+                <span class="font-medium text-sm">${message}</span>
+            `;
+            container.appendChild(toast);
+            lucide.createIcons();
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                toast.style.transition = 'all 0.3s ease-in-out';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // --- CORE: Chamadas de API Genéricas ---
+        async function tjCall(endpoint, method = 'GET') {
+            const url = `/tj-proxy/${endpoint}`;
+            const response = await fetch(url, {
+                method: method,
+                headers: { 'Authorization': `Bearer ${TJ_TOKEN}`, 'Accept': 'application/json' }
+            });
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(text || `HTTP Error ${response.status}`);
+            }
+            // Algumas requisições PUT da TJ retornam vazio, então tratamos o JSON apenas se houver
+            const text = await response.text();
+            return text ? JSON.parse(text) : { success: true };
+        }
+
+        // --- DASHBOARD PRINCIPAL (STATS) ---
         function getDates() {
             const filter = document.getElementById('date-filter').value;
-            const end = new Date();
-            const start = new Date();
+            const end = new Date(), start = new Date();
             if (filter === 'yesterday') { start.setDate(start.getDate() - 1); end.setDate(end.getDate() - 1); } 
             else if (filter === '7days') { start.setDate(start.getDate() - 7); } 
             else if (filter === '30days') { start.setDate(start.getDate() - 30); }
-            const formata = (d) => d.toISOString().split('T')[0];
-            return { startDate: formata(start), endDate: formata(end) };
+            const f = (d) => d.toISOString().split('T')[0];
+            return { startDate: f(start), endDate: f(end) };
         }
 
         async function fetchTJData() {
             const btn = document.getElementById('refresh-btn');
-            const icon = document.getElementById('refresh-icon');
             const tbody = document.getElementById('table-body');
-            
             const { startDate, endDate } = getDates();
-            document.getElementById('subtitle-dates').innerText = `Analisando tráfego de ${startDate} até ${endDate}`;
-
-            const TJ_API_URL = '/tj-proxy/' + `api/campaigns/stats.json?start_date=${startDate}&end_date=${endDate}`;
-
+            
             btn.disabled = true;
-            icon.classList.add('animate-spin');
-            tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-16 text-center text-gray-400"><i data-lucide="loader-2" class="animate-spin w-8 h-8 mx-auto mb-3 text-indigo-500"></i>Conectando com os servidores da TrafficJunky...</td></tr>`;
+            document.getElementById('refresh-icon').classList.add('animate-spin');
+            tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-gray-500"><i data-lucide="loader-2" class="animate-spin w-6 h-6 mx-auto mb-2"></i>A buscar dados...</td></tr>`;
             lucide.createIcons();
 
             try {
-                const response = await fetch(TJ_API_URL, {
-                    method: 'GET',
-                    headers: { 'Authorization': `Bearer ${TJ_TOKEN}`, 'Accept': 'application/json' }
-                });
-
-                if (!response.ok) throw new Error(`Erro API: ${response.status}`);
-                const data = await response.json();
+                const data = await tjCall(`api/campaigns/stats.json?start_date=${startDate}&end_date=${endDate}`);
                 renderData(data);
             } catch (error) {
-                console.error("Erro fatal:", error);
-                tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-12 text-center text-red-500">Falha de conexão. Verifique o console.</td></tr>`;
+                showToast("Erro ao sincronizar dados do Dashboard.", "error");
+                tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-red-500">Falha de conexão. Verifique a chave ou o proxy.</td></tr>`;
             } finally {
                 btn.disabled = false;
-                icon.classList.remove('animate-spin');
+                document.getElementById('refresh-icon').classList.remove('animate-spin');
             }
         }
 
@@ -195,149 +265,52 @@
 
             if (data && typeof data === 'object' && !Array.isArray(data)) {
                 Object.keys(data).forEach(id => {
-                    if (data[id] && typeof data[id] === 'object') {
-                        dadosFinais.push({ campaign_id_key: id, ...data[id] });
-                    }
+                    if (data[id] && typeof data[id] === 'object') dadosFinais.push({ campaign_id_key: id, ...data[id] });
                 });
-            } else if (Array.isArray(data)) {
-                dadosFinais = data;
-            }
+            } else if (Array.isArray(data)) { dadosFinais = data; }
 
             if (dadosFinais.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-12 text-center text-gray-500">Sem dados registrados para as datas selecionadas.</td></tr>`;
-                document.getElementById('total-cost').innerText = formatCurrency(0);
-                document.getElementById('total-impressions').innerText = formatNumber(0);
-                document.getElementById('total-clicks').innerText = formatNumber(0);
-                document.getElementById('total-conversions').innerText = formatNumber(0);
-                document.getElementById('total-plays').innerText = formatNumber(0);
+                tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-gray-500">Sem tráfego neste período.</td></tr>`;
                 return;
             }
 
             dadosFinais.sort((a, b) => parseFloat(b.cost || 0) - parseFloat(a.cost || 0));
-
-            let tCost = 0, tImp = 0, tClicks = 0, tConv = 0, tPlays = 0;
-            let html = '';
+            let tCost = 0, tImp = 0, tPlays = 0, tConv = 0, html = '';
 
             dadosFinais.forEach(row => {
-                // Parse de todas as métricas disponíveis
                 const cost = parseFloat(row.cost || 0);
                 const imp = parseInt(row.impressions || 0);
-                const clicks = parseInt(row.clicks || 0);
-                const conv = parseInt(row.conversions || 0);
                 const plays = parseInt(row.plays || 0);
-                const skips = parseInt(row.skips || 0);
-                const completed = parseInt(row.completed || 0);
-                const iframes = parseInt(row.iframes || 0);
+                const conv = parseInt(row.conversions || 0);
                 
                 const name = row.campaign_name || "Campanha";
                 const id = row.campaign_id || row.campaign_id_key;
-                const type = (row.campaign_type || "N/A").toUpperCase();
-                
-                const adsCount = parseInt(row.ads_count || 0);
-                const adsPaused = parseInt(row.ads_paused || 0);
-                const adsActive = adsCount - adsPaused;
-                const spotsCount = Array.isArray(row.spots) ? row.spots.length : 0;
-
                 const ctr = parseFloat(row.ctr || 0).toFixed(3);
                 const ecpm = parseFloat(row.ecpm || 0);
-                const ecpc = parseFloat(row.ecpc || 0);
 
-                tCost += cost; tImp += imp; tClicks += clicks; tConv += conv; tPlays += plays;
+                tCost += cost; tImp += imp; tPlays += plays; tConv += conv;
+
+                // Escapando aspas para passar nos botões
+                const safeName = name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
                 html += `
                     <tr class="transition-colors hover:bg-gray-800/40">
-                        
-                        <!-- Coluna 1: Campanha & Tipo -->
                         <td class="px-6 py-4">
-                            <div class="flex flex-col">
-                                <span class="font-bold text-gray-200 text-base flex items-center gap-2">
-                                    ${name}
-                                </span>
-                                <div class="flex items-center gap-2 mt-1.5">
-                                    <span class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded border border-gray-700 font-mono">ID: ${id}</span>
-                                    <span class="text-[10px] bg-indigo-900/30 text-indigo-400 px-2 py-0.5 rounded uppercase tracking-wider font-bold">${type}</span>
-                                </div>
-                            </div>
+                            <span class="font-bold text-gray-200">${name}</span>
+                            <div class="mt-1"><span class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded font-mono">ID: ${id}</span></div>
                         </td>
-
-                        <!-- Coluna 2: Estrutura (Ads/Spots) -->
-                        <td class="px-6 py-4">
-                            <div class="flex flex-col gap-1 text-xs text-gray-400">
-                                <div class="flex items-center gap-1.5">
-                                    <div class="w-1.5 h-1.5 rounded-full ${adsActive > 0 ? 'bg-emerald-500' : 'bg-red-500'}"></div>
-                                    <span>${adsActive} Ads Ativos</span>
-                                </div>
-                                <div class="flex items-center gap-1.5">
-                                    <div class="w-1.5 h-1.5 rounded-full bg-gray-600"></div>
-                                    <span>${adsPaused} Ads Pausados</span>
-                                </div>
-                                <div class="flex items-center gap-1.5 mt-1 pt-1 border-t border-gray-800/50">
-                                    <i data-lucide="layers" class="w-3 h-3 text-gray-500"></i>
-                                    <span class="text-gray-300">${spotsCount} Spots Alvo</span>
-                                </div>
-                            </div>
-                        </td>
-
-                        <!-- Coluna 3: Investimento -->
-                        <td class="px-6 py-4">
-                            <span class="text-emerald-400 font-bold text-lg bg-emerald-900/10 px-3 py-1.5 rounded border border-emerald-500/10">${formatCurrency(cost)}</span>
-                        </td>
-
-                        <!-- Coluna 4: Volume Geral -->
+                        <td class="px-6 py-4"><span class="text-emerald-400 font-bold">${formatCurrency(cost)}</span></td>
                         <td class="px-6 py-4 text-right">
-                            <div class="flex flex-col items-end gap-1">
-                                <span class="text-gray-300 font-medium flex items-center gap-1.5" title="Impressões">
-                                    ${formatNumber(imp)} <i data-lucide="eye" class="w-3.5 h-3.5 text-blue-400"></i>
-                                </span>
-                                <span class="text-gray-400 text-sm flex items-center gap-1.5" title="Cliques">
-                                    ${formatNumber(clicks)} <i data-lucide="mouse-pointer-click" class="w-3.5 h-3.5 text-indigo-400"></i>
-                                </span>
-                                ${iframes > 0 ? `<span class="text-gray-500 text-xs flex items-center gap-1 mt-0.5" title="Iframes">
-                                    ${formatNumber(iframes)} <i data-lucide="monitor" class="w-3 h-3 text-gray-600"></i>
-                                </span>` : ''}
-                            </div>
+                            <span class="text-gray-300 flex items-center justify-end gap-1">${formatNumber(imp)} <i data-lucide="eye" class="w-3 h-3"></i></span>
                         </td>
-
-                        <!-- Coluna 5: Métricas de Vídeo (Especial CTV) -->
-                        <td class="px-6 py-4 bg-purple-900/5 border-x border-gray-800/50">
-                            <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                                <div class="flex flex-col items-center p-1.5 bg-gray-950/50 rounded border border-gray-800">
-                                    <span class="text-gray-500 uppercase text-[9px] font-bold tracking-wider">Plays</span>
-                                    <span class="text-purple-400 font-medium">${formatNumber(plays)}</span>
-                                </div>
-                                <div class="flex flex-col items-center p-1.5 bg-gray-950/50 rounded border border-gray-800">
-                                    <span class="text-gray-500 uppercase text-[9px] font-bold tracking-wider">Completo</span>
-                                    <span class="text-emerald-500 font-medium">${formatNumber(completed)}</span>
-                                </div>
-                                <div class="col-span-2 flex flex-col items-center p-1.5 bg-gray-950/50 rounded border border-gray-800">
-                                    <span class="text-gray-500 uppercase text-[9px] font-bold tracking-wider">Skips (Pulos)</span>
-                                    <span class="text-red-400 font-medium">${formatNumber(skips)}</span>
-                                </div>
-                            </div>
+                        <td class="px-6 py-4 text-right font-mono text-gray-400">${formatMicro(ecpm)}</td>
+                        <td class="px-6 py-4 text-center">
+                            <span class="inline-flex items-center gap-1 ${ctr > 0.1 ? 'text-indigo-400' : 'text-gray-400'}"><i data-lucide="percent" class="w-3 h-3"></i> ${ctr}</span>
                         </td>
-
-                        <!-- Coluna 6: Custos -->
-                        <td class="px-6 py-4 text-right">
-                            <div class="flex flex-col items-end gap-1 font-mono">
-                                <span class="text-gray-300 text-xs bg-gray-800/50 px-2 py-0.5 rounded border border-gray-700/50 flex justify-between w-28">
-                                    <span class="text-gray-500">eCPM</span>${formatMicro(ecpm)}
-                                </span>
-                                <span class="text-gray-300 text-xs bg-gray-800/50 px-2 py-0.5 rounded border border-gray-700/50 flex justify-between w-28">
-                                    <span class="text-gray-500">eCPC</span>${formatMicro(ecpc)}
-                                </span>
-                            </div>
-                        </td>
-
-                        <!-- Coluna 7: Performance Final -->
-                        <td class="px-6 py-4">
-                            <div class="flex flex-col items-center gap-2">
-                                <span class="inline-flex items-center gap-1 font-bold ${ctr > 0.1 ? 'text-indigo-400' : 'text-gray-300'} bg-indigo-900/10 px-2.5 py-1 rounded-md border border-indigo-500/10 w-full justify-center" title="CTR">
-                                    <i data-lucide="percent" class="w-3 h-3"></i> ${ctr}
-                                </span>
-                                <div class="flex items-center gap-1 text-xs w-full justify-center ${conv > 0 ? 'text-orange-400 font-bold bg-orange-900/20' : 'text-gray-500 bg-gray-800'} px-2 py-1 rounded border border-gray-700">
-                                    <i data-lucide="target" class="w-3 h-3"></i> ${conv} Conv.
-                                </div>
-                            </div>
+                        <td class="px-6 py-4 text-center">
+                            <button onclick="openManageModal('${id}', '${safeName}')" class="bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 px-4 py-1.5 rounded text-xs font-bold transition-all flex items-center justify-center gap-2 w-full mx-auto">
+                                <i data-lucide="sliders" class="w-4 h-4"></i> Gerenciar
+                            </button>
                         </td>
                     </tr>
                 `;
@@ -345,14 +318,210 @@
 
             tbody.innerHTML = html;
             lucide.createIcons();
-
             document.getElementById('total-cost').innerText = formatCurrency(tCost);
             document.getElementById('total-impressions').innerText = formatNumber(tImp);
-            document.getElementById('total-clicks').innerText = formatNumber(tClicks);
             document.getElementById('total-plays').innerText = formatNumber(tPlays);
             document.getElementById('total-conversions').innerText = formatNumber(tConv);
         }
 
+        // --- FUNÇÕES DE GESTÃO (MODAL E APIS) ---
+        let currentCampaignId = null;
+
+        async function openManageModal(campId, campName) {
+            currentCampaignId = campId;
+            document.getElementById('manage-modal').classList.remove('hidden');
+            document.getElementById('modal-title').innerHTML = `<i data-lucide="settings" class="w-6 h-6"></i> ${campName}`;
+            document.getElementById('modal-subtitle').innerText = `ID da Campanha: ${campId}`;
+            
+            document.getElementById('modal-loading').classList.remove('hidden');
+            document.getElementById('modal-content').classList.add('hidden');
+            lucide.createIcons();
+
+            try {
+                // Dispara os dois requests em paralelo para ser rápido
+                const [bidsData, adsData] = await Promise.all([
+                    tjCall(`api/bids/${campId}.json`), // Busca lances
+                    tjCall(`api/ads/${campId}.json`)   // Busca Ads
+                ]);
+                
+                renderBids(bidsData);
+                renderAds(adsData);
+
+                // Como a API não nos dá a rota de status da campanha diretamente no endpoint de stats, 
+                // deixamos o botão de pausa genérico configurado para essa campanha
+                setupCampaignPauseButton(campId);
+
+                document.getElementById('modal-loading').classList.add('hidden');
+                document.getElementById('modal-content').classList.remove('hidden');
+                lucide.createIcons();
+            } catch (error) {
+                console.error(error);
+                showToast("Erro ao carregar configurações da campanha.", "error");
+                closeModal();
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('manage-modal').classList.add('hidden');
+            currentCampaignId = null;
+        }
+
+        function renderBids(bidsArray) {
+            const tbody = document.getElementById('bids-body');
+            if (!bidsArray || !Array.isArray(bidsArray) || bidsArray.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">Nenhum Bid encontrado.</td></tr>`;
+                return;
+            }
+
+            let html = '';
+            bidsArray.forEach(bidObj => {
+                // Normalmente a TJ envia em array, checar console se precisar ajustar prop
+                const b = bidObj.Bid || bidObj; 
+                if(!b.id) return;
+
+                html += `
+                    <tr class="hover:bg-gray-800/30">
+                        <td class="px-4 py-3 font-mono text-gray-400 text-xs">${b.id}</td>
+                        <td class="px-4 py-3 text-gray-300 text-xs truncate max-w-[200px]" title="${b.spot_id || 'Global'}">Spot: ${b.spot_id || 'Campanha Global'}</td>
+                        <td class="px-4 py-3">
+                            <input type="number" step="0.001" id="input-bid-${b.id}" value="${b.bid || 0}" class="bg-gray-900 border border-gray-700 text-white text-xs rounded p-1.5 w-24 outline-none focus:border-emerald-500 text-right">
+                        </td>
+                        <td class="px-4 py-3">
+                            <button onclick="updateBid('${b.id}')" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded text-xs font-bold transition-colors shadow flex items-center gap-1">
+                                <i data-lucide="check" class="w-3 h-3"></i> Salvar
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        }
+
+        function renderAds(adsArray) {
+            const tbody = document.getElementById('ads-body');
+            if (!adsArray || !Array.isArray(adsArray) || adsArray.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">Nenhum Ad encontrado.</td></tr>`;
+                return;
+            }
+
+            let html = '';
+            adsArray.forEach(adItem => {
+                const ad = adItem.Ad || adItem;
+                if(!ad.ad_id) return;
+                
+                // Converte string para bool/número confiável
+                const isPaused = ad.is_paused == 1 || ad.is_paused === true || ad.is_paused === '1';
+
+                html += `
+                    <tr class="hover:bg-gray-800/30">
+                        <td class="px-4 py-3 font-mono text-gray-400 text-xs">${ad.ad_id}</td>
+                        <td class="px-4 py-3">
+                            <div class="text-gray-200 text-xs font-bold truncate max-w-[250px]">${ad.ad_name || 'Anúncio sem nome'}</div>
+                            <div class="text-gray-500 text-[10px] truncate max-w-[250px] mt-0.5">${ad.target_url || ''}</div>
+                        </td>
+                        <td class="px-4 py-3 text-center" id="status-ad-${ad.ad_id}">
+                            ${isPaused ? '<span class="bg-red-500/20 text-red-400 px-2 py-0.5 rounded text-[10px] uppercase font-bold">Pausado</span>' : '<span class="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded text-[10px] uppercase font-bold">Ativo</span>'}
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            <button onclick="toggleAd('${ad.ad_id}', ${isPaused})" class="${isPaused ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'} text-white px-3 py-1.5 rounded text-xs font-bold transition-colors shadow inline-flex items-center gap-1 min-w-[80px] justify-center">
+                                <i data-lucide="${isPaused ? 'play' : 'pause'}" class="w-3 h-3"></i> ${isPaused ? 'Ativar' : 'Pausar'}
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        }
+
+        // --- AÇÕES DIRETAS (PUT / PATCH) ---
+
+        // Atualizar Bid
+        async function updateBid(bidId) {
+            const input = document.getElementById(`input-bid-${bidId}`);
+            const novoValor = parseFloat(input.value);
+            if(isNaN(novoValor) || novoValor <= 0) {
+                showToast("Valor do lance inválido.", "error"); return;
+            }
+            
+            const btn = event.currentTarget;
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i>`;
+            btn.disabled = true;
+            lucide.createIcons();
+
+            try {
+                // endpoint: PUT /api/bids/{bidId}/set.{format}?bid={value}
+                await tjCall(`api/bids/${bidId}/set.json?bid=${novoValor}`, 'PUT');
+                showToast(`Bid atualizado para $${novoValor}!`, 'success');
+            } catch (error) {
+                console.error(error);
+                showToast("Erro ao alterar o lance.", "error");
+            } finally {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+                lucide.createIcons();
+            }
+        }
+
+        // Alternar Estado do Ad (Ativar / Pausar)
+        async function toggleAd(adId, currentlyPaused) {
+            // endpoint: PUT /api/ads/{adId}/pauses/{active}.json
+            // Se está pausado, queremos ativar (active = 1). Se não, pausar (active = 0).
+            const activeParam = currentlyPaused ? 1 : 0;
+            
+            const btn = event.currentTarget;
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i>`;
+            btn.disabled = true;
+            lucide.createIcons();
+
+            try {
+                await tjCall(`api/ads/${adId}/pauses/${activeParam}.json`, 'PUT');
+                showToast(`Anúncio ${activeParam ? 'ativado' : 'pausado'} com sucesso!`);
+                // Como não queremos recarregar tudo, apenas recarregamos a aba de Ads para refletir a nova UI
+                const adsData = await tjCall(`api/ads/${currentCampaignId}.json`);
+                renderAds(adsData);
+                lucide.createIcons();
+            } catch (error) {
+                console.error(error);
+                showToast("Falha ao alterar o status do Ad.", "error");
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+                lucide.createIcons();
+            }
+        }
+
+        // Alternar Estado da Campanha Inteira
+        function setupCampaignPauseButton(campId) {
+            const btn = document.getElementById('btn-pause-campaign');
+            // Como padrão, faremos um botão dinâmico. Se você clica, pergunta se quer pausar ou ativar.
+            btn.innerHTML = `<i data-lucide="power"></i> Alternar Status (Play/Pause)`;
+            btn.className = "bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-lg flex items-center gap-2";
+            btn.onclick = async () => {
+                const action = confirm("Deseja PAUSAR a campanha? (OK para Pausar, Cancelar para tentar Ativar)");
+                const isPausedParam = action ? 1 : 0; // 1 = paused, 0 = active
+                
+                const originalHTML = btn.innerHTML;
+                btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Processando...`;
+                btn.disabled = true;
+                lucide.createIcons();
+
+                try {
+                    // endpoint: PUT /api/pauses/{campaignId}/campaigns/{isPaused}.json
+                    await tjCall(`api/pauses/${campId}/campaigns/${isPausedParam}.json`, 'PUT');
+                    showToast(`Ação concluída! A campanha foi ${isPausedParam ? 'Pausada' : 'Ativada'}.`, 'success');
+                } catch(error) {
+                    console.error(error);
+                    showToast("Erro ao processar a requisição da Campanha.", "error");
+                } finally {
+                    btn.innerHTML = originalHTML;
+                    btn.disabled = false;
+                    lucide.createIcons();
+                }
+            };
+        }
+
+        // Inicializar dashboard
         window.onload = fetchTJData;
     </script>
 </body>
