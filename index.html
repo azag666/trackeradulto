@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traffic Monitor | TJ Stats</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-gray-950 text-gray-100 p-6 font-sans selection:bg-indigo-500/30 min-h-screen">
+
+    <div class="max-w-7xl mx-auto space-y-6">
+        
+        <!-- Cabeçalho -->
+        <header class="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-gray-800">
+            <div>
+                <h1 class="text-2xl font-bold flex items-center gap-2 text-white">
+                    <i data-lucide="activity" class="text-indigo-500"></i>
+                    Traffic Monitor <span class="text-gray-500 font-light text-xl">| TJ Stats</span>
+                </h1>
+                <p class="text-sm text-gray-400 mt-1">
+                    Monitoramento direto da API da TrafficJunky (Custos e Volume)
+                </p>
+            </div>
+            <div class="mt-4 md:mt-0 flex items-center gap-4">
+                <span id="cors-warning" class="hidden text-xs bg-yellow-500/10 text-yellow-500 px-3 py-1 rounded-full border border-yellow-500/20 flex items-center gap-1">
+                    <i data-lucide="alert-circle" class="w-4 h-4"></i> Modo Simulado Ativo (CORS)
+                </span>
+                <button 
+                    onclick="fetchTJData()"
+                    id="refresh-btn"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                    <i data-lucide="refresh-cw" id="refresh-icon" class="w-4 h-4"></i>
+                    Atualizar Dados
+                </button>
+            </div>
+        </header>
+
+        <!-- Cards de Resumo -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-lg relative overflow-hidden">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-gray-400 text-sm font-medium mb-1">Investimento Total (USD)</p>
+                        <h3 id="total-cost" class="text-2xl font-bold text-white">$ 0,00</h3>
+                    </div>
+                    <div class="p-2 bg-gray-800/80 rounded-lg">
+                        <i data-lucide="dollar-sign" class="text-emerald-400 w-5 h-5"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-lg relative overflow-hidden">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-gray-400 text-sm font-medium mb-1">Total de Impressões</p>
+                        <h3 id="total-impressions" class="text-2xl font-bold text-white">0</h3>
+                    </div>
+                    <div class="p-2 bg-gray-800/80 rounded-lg">
+                        <i data-lucide="eye" class="text-blue-400 w-5 h-5"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-lg relative overflow-hidden">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-gray-400 text-sm font-medium mb-1">Total de Cliques</p>
+                        <h3 id="total-clicks" class="text-2xl font-bold text-white">0</h3>
+                    </div>
+                    <div class="p-2 bg-gray-800/80 rounded-lg">
+                        <i data-lucide="mouse-pointer-click" class="text-indigo-400 w-5 h-5"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabela de Dados -->
+        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden shadow-2xl">
+            <div class="p-5 border-b border-gray-800 bg-gray-900/50">
+                <h2 class="text-lg font-semibold text-gray-200">Métricas por Spot / Source ID</h2>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm whitespace-nowrap">
+                    <thead class="bg-gray-950/50 text-gray-400 uppercase tracking-wider text-xs">
+                        <tr>
+                            <th class="px-6 py-4 font-medium">Source / Spot ID</th>
+                            <th class="px-6 py-4 font-medium">Investimento (USD)</th>
+                            <th class="px-6 py-4 font-medium text-right">Impressões</th>
+                            <th class="px-6 py-4 font-medium text-right">Cliques</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body" class="divide-y divide-gray-800/50">
+                        <tr>
+                            <td colspan="4" class="px-6 py-12 text-center text-gray-500">
+                                Inicializando dashboard...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lógica JavaScript -->
+    <script>
+        // Inicializa os ícones do Lucide
+        lucide.createIcons();
+
+        // Configurações
+        const TJ_API_URL = 'https://api.trafficjunky.com/api/reports/stats';
+        const TJ_TOKEN = '0a5cae844058508f0f70eee015ac6d3a8adfbd670fe1c60f7ac3c3f6f1b51fe975ce183c79f2ac31168cd7fed358165736c9b24fb65cf490f8fcd77549b20691';
+
+        // Mock para teste no navegador (quando a requisição real bloqueia por CORS)
+        const mockTJResponse = [
+            { spot_id: "SPOT_847291", cost: "105.50", impressions: 50000, clicks: 1200 },
+            { spot_id: "SPOT_918233", cost: "65.20", impressions: 32000, clicks: 800 },
+            { spot_id: "SPOT_102938", cost: "210.00", impressions: 110000, clicks: 3500 },
+            { spot_id: "SPOT_556677", cost: "15.00", impressions: 8000, clicks: 150 },
+            { spot_id: "SPOT_889900", cost: "250.00", impressions: 95000, clicks: 2800 },
+        ];
+
+        // Formatadores
+        const formatCurrency = (value) => {
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+        };
+        const formatNumber = (value) => {
+            return new Intl.NumberFormat('pt-BR').format(value);
+        };
+
+        // Função principal
+        async function fetchTJData() {
+            const btn = document.getElementById('refresh-btn');
+            const icon = document.getElementById('refresh-icon');
+            const warning = document.getElementById('cors-warning');
+            const tbody = document.getElementById('table-body');
+            
+            // Estado de carregamento
+            btn.disabled = true;
+            icon.classList.add('animate-spin');
+            tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">Buscando métricas da TrafficJunky...</td></tr>`;
+            warning.classList.add('hidden');
+
+            try {
+                // Requisição real
+                const response = await fetch(TJ_API_URL, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${TJ_TOKEN}`,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Erro: ${response.status}`);
+                }
+
+                const data = await response.json();
+                renderData(data);
+
+            } catch (error) {
+                console.warn("Aviso: Falha ao conectar com API TJ. Utilizando dados simulados.", error);
+                // Exibe alerta de CORS e carrega mock
+                warning.classList.remove('hidden');
+                warning.classList.add('flex');
+                renderData(mockTJResponse);
+            } finally {
+                // Finaliza estado de carregamento
+                btn.disabled = false;
+                icon.classList.remove('animate-spin');
+            }
+        }
+
+        // Renderiza os dados na tela
+        function renderData(data) {
+            const tbody = document.getElementById('table-body');
+            
+            if (!data || data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">Nenhum dado encontrado.</td></tr>`;
+                return;
+            }
+
+            // Ordena pelo maior gasto
+            data.sort((a, b) => parseFloat(b.cost) - parseFloat(a.cost));
+
+            let totalCost = 0;
+            let totalImp = 0;
+            let totalClicks = 0;
+            let html = '';
+
+            data.forEach(row => {
+                const cost = parseFloat(row.cost) || 0;
+                const imp = parseInt(row.impressions) || 0;
+                const clicks = parseInt(row.clicks) || 0;
+
+                totalCost += cost;
+                totalImp += imp;
+                totalClicks += clicks;
+
+                html += `
+                    <tr class="transition-colors hover:bg-gray-800/50">
+                        <td class="px-6 py-4 font-mono text-gray-300">${row.spot_id || '-'}</td>
+                        <td class="px-6 py-4 text-emerald-400 font-medium">${formatCurrency(cost)}</td>
+                        <td class="px-6 py-4 text-right text-gray-300">${formatNumber(imp)}</td>
+                        <td class="px-6 py-4 text-right text-gray-300">${formatNumber(clicks)}</td>
+                    </tr>
+                `;
+            });
+
+            // Atualiza Tabela
+            tbody.innerHTML = html;
+
+            // Atualiza Cards
+            document.getElementById('total-cost').innerText = formatCurrency(totalCost);
+            document.getElementById('total-impressions').innerText = formatNumber(totalImp);
+            document.getElementById('total-clicks').innerText = formatNumber(totalClicks);
+        }
+
+        // Carrega dados iniciais assim que a tela abre
+        window.onload = fetchTJData;
+
+    </script>
+</body>
+</html>
