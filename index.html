@@ -2217,70 +2217,71 @@
             }
 
             if (dim === 'tj-spot') {
-                // Spots agregados a partir de /api/bids/{campaignId}.json + stats por bid
-                // 1) Lista todos os bids (apenas campanhas com gasto > 0 pra economizar chamadas)
+                // Estratégia: ads de cada campanha já têm spot_id + spot_name.
+                // /api/ads/{campaignId}/stats/one.json dá stats por ad.
+                // Agregamos as stats por spot_id.
                 const activeIds = campRows.filter(r => r.cost > 0 || r.impressions > 0).map(r => r.id);
                 const ids = activeIds.length > 0 ? activeIds : Object.keys(campaignsCache);
-                console.log(`[TJ insights/spots] coletando bids de ${ids.length} campanhas`);
+                console.log(`[TJ insights/spots] varrendo ads de ${ids.length} campanhas`);
 
-                const allBids = []; // [{ bid_id, spot_id, spot_name, traffic }]
+                // ads: [{ ad_id, spot_id, spot_name, campaign_id }]
+                const allAds = [];
+                // adStatsMap[campaign_id][ad_id] = stats
+                const adStatsByCamp = {};
+
                 for (let i = 0; i < ids.length; i += 4) {
                     const chunk = ids.slice(i, i + 4);
-                    const results = await Promise.allSettled(chunk.map(id => tjApi(`api/bids/${id}.json`)));
-                    results.forEach(res => {
-                        if (res.status !== 'fulfilled') return;
-                        const flat = flattenBids(res.value);
-                        flat.forEach(b => {
-                            allBids.push({
-                                bid_id: b.bid_id,
-                                spot_id: String(b.spot_id),
-                                spot_name: b.spot_name || `Spot #${b.spot_id}`,
-                                traffic: parseInt(b.traffic) || 0
-                            });
-                        });
+                    // Em paralelo: lista de ads + stats da campanha
+                    const tasks = [];
+                    chunk.forEach(id => {
+                        tasks.push(tjApi(`api/ads/${id}.json`));
+                        tasks.push(tjApi(`api/ads/${id}/stats/one.json?startDate=${startDate}&endDate=${endDate}`).catch(() => []));
                     });
-                }
-                console.log(`[TJ insights/spots] ${allBids.length} bids encontrados; buscando stats...`);
-
-                // 2) Stats por bid (chunks de 8 paralelos). Cap em 200 bids pra UX.
-                const bidsToFetch = allBids.slice(0, 200);
-                const bidStatsMap = {}; // bid_id → { imps, clicks, cost, conv }
-                for (let i = 0; i < bidsToFetch.length; i += 8) {
-                    const chunk = bidsToFetch.slice(i, i + 8);
-                    const results = await Promise.allSettled(
-                        chunk.map(b => tjApi(`api/bids/${b.bid_id}/stats/one.json?startDate=${startDate}&endDate=${endDate}`))
-                    );
-                    results.forEach((r, k) => {
-                        const b = chunk[k];
-                        if (r.status === 'fulfilled') {
-                            const data = r.value;
-                            const s = (data && (data.stats || data.data)) || data || {};
-                            const flat2 = Array.isArray(s) ? (s[0] || {}) : s;
-                            bidStatsMap[b.bid_id] = {
-                                impressions: parseInt(flat2.impressions) || 0,
-                                clicks: parseInt(flat2.clicks) || 0,
-                                cost: parseFloat(flat2.cost ?? flat2.spend) || 0,
-                                conversions: parseInt(flat2.conversions) || 0
-                            };
+                    const results = await Promise.allSettled(tasks);
+                    chunk.forEach((cid, k) => {
+                        const adsR = results[k * 2];
+                        const statsR = results[k * 2 + 1];
+                        if (adsR.status === 'fulfilled') {
+                            const ads = Array.isArray(adsR.value) ? adsR.value : (adsR.value?.data || adsR.value?.ads || []);
+                            ads.forEach(a => {
+                                if (a.spot_id == null) return;
+                                allAds.push({
+                                    ad_id: a.ad_id,
+                                    campaign_id: cid,
+                                    spot_id: String(a.spot_id),
+                                    spot_name: a.spot_name || `Spot #${a.spot_id}`
+                                });
+                            });
+                        }
+                        if (statsR.status === 'fulfilled') {
+                            const arr = Array.isArray(statsR.value) ? statsR.value : (statsR.value?.data || []);
+                            const m = {};
+                            arr.forEach(item => {
+                                if (!item || typeof item !== 'object') return;
+                                Object.entries(item).forEach(([adId, s]) => {
+                                    if (s && typeof s === 'object') m[String(adId)] = s;
+                                });
+                            });
+                            adStatsByCamp[cid] = m;
                         }
                     });
                 }
+                console.log(`[TJ insights/spots] ${allAds.length} ads coletados; agregando por spot...`);
 
-                // 3) Agrega por spot_id
+                // Agrega por spot_id
                 const bySpot = {};
-                allBids.forEach(b => {
-                    if (!bySpot[b.spot_id]) bySpot[b.spot_id] = {
-                        name: b.spot_name, traffic: 0, bids_count: 0,
+                allAds.forEach(a => {
+                    if (!bySpot[a.spot_id]) bySpot[a.spot_id] = {
+                        name: a.spot_name, ads_count: 0,
                         impressions: 0, clicks: 0, cost: 0, conversions: 0
                     };
-                    bySpot[b.spot_id].traffic += b.traffic;
-                    bySpot[b.spot_id].bids_count += 1;
-                    const s = bidStatsMap[b.bid_id];
+                    bySpot[a.spot_id].ads_count += 1;
+                    const s = adStatsByCamp[a.campaign_id]?.[String(a.ad_id)];
                     if (s) {
-                        bySpot[b.spot_id].impressions += s.impressions;
-                        bySpot[b.spot_id].clicks += s.clicks;
-                        bySpot[b.spot_id].cost += s.cost;
-                        bySpot[b.spot_id].conversions += s.conversions;
+                        bySpot[a.spot_id].impressions += parseInt(s.impressions) || 0;
+                        bySpot[a.spot_id].clicks += parseInt(s.clicks) || 0;
+                        bySpot[a.spot_id].cost += parseFloat(s.cost ?? s.spend) || 0;
+                        bySpot[a.spot_id].conversions += parseInt(s.conversions) || 0;
                     }
                 });
                 console.log(`[TJ insights/spots] ${Object.keys(bySpot).length} spots únicos`);
@@ -2288,9 +2289,12 @@
                 if (Object.keys(bySpot).length === 0) {
                     return { rows: [], totals: totalsObj };
                 }
+                // Filtra spots com qualquer atividade pra não poluir
+                const filtered = Object.values(bySpot).filter(s => s.impressions > 0 || s.cost > 0);
+                const finalSpots = filtered.length > 0 ? filtered : Object.values(bySpot);
 
-                const rows = Object.values(bySpot).map(s => mkRow(
-                    `${s.name} · ${s.bids_count} bids`,
+                const rows = finalSpots.map(s => mkRow(
+                    `${s.name} · ${s.ads_count} ads`,
                     { impressions: s.impressions, clicks: s.clicks, cost: s.cost, conversions: s.conversions }
                 ));
                 return { rows, totals: totalsObj };
