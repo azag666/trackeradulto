@@ -528,12 +528,25 @@
             activeNetwork = net;
             localStorage.setItem('active_network', net);
             updateNetworkUI();
-            // Reset caches e refetch
+            // Reset caches
             campaignsCache = {};
             currentStats = {};
             allRows = [];
+            // Limpa visualmente o dashboard pra não mostrar dados da rede anterior
+            resetKpis();
+            document.getElementById('header-balance').innerText = '$ —';
+            document.getElementById('header-budget').innerText = '$ —';
+            document.getElementById('fin-balance').innerText = '$ —';
+            document.getElementById('fin-budget-left').innerText = '$ —';
+            document.getElementById('fin-budget-total').innerText = '$ —';
+            document.getElementById('dash-tbody').innerHTML = `<tr><td colspan="9" class="py-20 text-center text-slate-600">Carregando ${net.toUpperCase()}...</td></tr>`;
             const tokenOk = (net === 'tj' && TJ_TOKEN) || (net === 'tf' && TF_TOKEN);
-            if (!tokenOk) { openTokenModal(); showToast(`Cole o token ${net.toUpperCase()} pra começar`, 'warn'); return; }
+            if (!tokenOk) {
+                document.getElementById('dash-tbody').innerHTML = `<tr><td colspan="9" class="py-20 text-center text-yellow-400">Token ${net.toUpperCase()} ausente. Clica na chave 🔑 e cola.</td></tr>`;
+                openTokenModal();
+                showToast(`Cole o token ${net.toUpperCase()} pra começar`, 'warn');
+                return;
+            }
             fetchMemberData();
             fetchCampaignsList().then(() => fetchCampaignStats());
         }
