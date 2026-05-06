@@ -660,10 +660,10 @@
                 tj.className = 'px-3 py-1 rounded-full text-[10px] font-black uppercase transition-all text-slate-500';
                 tf.className = 'px-3 py-1 rounded-full text-[10px] font-black uppercase transition-all bg-fuchsia-600 text-white';
             }
-            // Adapter UI: bids/spots só fazem sentido em TJ
+            // Adapter UI: spots só TJ; bids existem em ambas (mas com semântica diferente)
             const subtabBids = document.getElementById('subtab-bids');
             const subtabSpots = document.getElementById('subtab-spots');
-            if (subtabBids) subtabBids.style.display = activeNetwork === 'tj' ? '' : 'none';
+            if (subtabBids) subtabBids.style.display = '';
             if (subtabSpots) subtabSpots.style.display = activeNetwork === 'tj' ? '' : 'none';
         }
 
@@ -1144,6 +1144,75 @@
             wrap.innerHTML = `<div class="p-6 text-center text-slate-500 animate-pulse">Carregando bids...</div>`;
             const startDate = document.getElementById('filter-start').value;
             const endDate = document.getElementById('filter-end').value;
+
+            // === TF mode: mostra price + pricing model + edit ===
+            if (activeNetwork === 'tf') {
+                try {
+                    // Pega detalhe da campanha pra ter price + pricing_model
+                    const data = await tfApi(`campaigns/${currentCampId}`);
+                    console.log('[TF /campaigns/{id} detail raw]', data);
+                    // Pode vir como mapa-id ou {result: {...}}
+                    let camp = null;
+                    if (data?.result) {
+                        if (typeof data.result === 'object' && !Array.isArray(data.result)) {
+                            camp = data.result[currentCampId] || Object.values(data.result)[0] || data.result;
+                        }
+                    }
+                    if (!camp) camp = data;
+                    const cached = campaignsCache[currentCampId] || {};
+                    Object.assign(cached, { _detail: camp });
+                    campaignsCache[currentCampId] = cached;
+
+                    const price = parseFloat(camp.price ?? cached._raw?.price) || 0;
+                    const pricingModelName = safeStr(camp.pricing_model_name ?? cached._raw?.pricing_model_name, '—');
+                    const pricingModelId = camp.pricing_model ?? cached._raw?.pricing_model;
+                    const totalBudget = parseFloat(camp.total_budget_limit ?? cached._raw?.total_budget_limit) || 0;
+                    const totalSpent = parseFloat(camp.total_budget_spent ?? cached._raw?.total_budget_spent) || 0;
+                    const idgroup = camp.idgroup ?? cached._raw?.idgroup;
+                    const adType = safeStr(camp.advertiser_ad_type_label ?? cached._raw?.advertiser_ad_type_label, '');
+
+                    wrap.innerHTML = `
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 p-5 border-b border-slate-800">
+                            <div>
+                                <p class="text-[9px] text-slate-500 font-black uppercase mb-1">Modelo de Preço</p>
+                                <p class="text-fuchsia-400 font-bold">${escapeHtml(pricingModelName)}</p>
+                                <p class="text-[10px] text-slate-600 font-mono">id ${pricingModelId ?? '?'}</p>
+                            </div>
+                            <div>
+                                <p class="text-[9px] text-slate-500 font-black uppercase mb-1">Lance Atual (price)</p>
+                                <p class="text-emerald-400 font-mono font-bold text-lg">$${price.toFixed(4)}</p>
+                            </div>
+                            <div>
+                                <p class="text-[9px] text-slate-500 font-black uppercase mb-1">Budget Total</p>
+                                <p class="text-indigo-400 font-mono font-bold">${formatUSD(totalBudget)}</p>
+                                <p class="text-[10px] text-slate-600">gasto: ${formatUSD(totalSpent)}</p>
+                            </div>
+                            <div>
+                                <p class="text-[9px] text-slate-500 font-black uppercase mb-1">Tipo / Grupo</p>
+                                <p class="text-slate-300 font-bold text-xs">${escapeHtml(adType)}</p>
+                                <p class="text-[10px] text-slate-600">grupo #${idgroup ?? '0'}</p>
+                            </div>
+                        </div>
+                        <div class="p-5 space-y-3">
+                            <h3 class="text-sm font-bold text-slate-300 flex items-center gap-2"><i data-lucide="trending-up" class="w-4 h-4 text-fuchsia-400"></i> Editar Lance</h3>
+                            <div class="flex items-end gap-3">
+                                <div class="flex-1">
+                                    <label class="text-[10px] font-black text-slate-500 uppercase mb-1 block">Novo lance (USD ${pricingModelId == 1 ? 'por clique' : pricingModelId == 2 ? 'CPM' : pricingModelId == 3 ? 'CPA' : pricingModelId == 5 ? 'por view' : ''})</label>
+                                    <input type="number" step="0.0001" min="0" id="tf-price-input" value="${price}" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 w-full text-emerald-400 font-mono outline-none focus:border-fuchsia-500">
+                                </div>
+                                <button onclick="updateTFPrice()" class="bg-fuchsia-600 hover:bg-fuchsia-500 text-white px-5 py-2 rounded-lg text-xs font-bold flex items-center gap-2"><i data-lucide="save" class="w-3.5 h-3.5"></i> SALVAR</button>
+                            </div>
+                            <p class="text-[10px] text-slate-600">Em TF, o "bid" é configurado a nível de campanha (campo <code>price</code>). Ajustes granulares por spot/zone vão pelo bidder/rules.</p>
+                        </div>
+                    `;
+                    lucide.createIcons();
+                } catch (e) {
+                    wrap.innerHTML = `<div class="p-6 text-center text-red-400">Erro: ${escapeHtml(e.message)}</div>`;
+                }
+                return;
+            }
+
+            // === TJ mode (atual) ===
             try {
                 const raw = await tjApi(`api/bids/${currentCampId}.json`);
                 const flat = flattenBids(raw);
@@ -1287,6 +1356,19 @@
                 await tjApi(`api/bids/${bidId}/set.json?bid=${val}`, 'PUT');
                 showToast(`Bid #${bidId} → ${val}`);
             } catch (e) { showToast('Erro bid: '+e.message, 'error'); }
+        }
+
+        async function updateTFPrice() {
+            if (!currentCampId) return;
+            const val = parseFloat(document.getElementById('tf-price-input').value) || 0;
+            if (val <= 0) return showToast('Lance deve ser > 0', 'warn');
+            try {
+                // PUT /campaigns/{id} body { price: <num> }
+                await tfApi(`campaigns/${currentCampId}`, 'PUT', { price: val });
+                showToast(`Lance atualizado: $${val.toFixed(4)}`);
+                if (campaignsCache[currentCampId]?._raw) campaignsCache[currentCampId]._raw.price = val;
+                loadBids();
+            } catch (e) { showToast('Erro lance: '+e.message, 'error'); }
         }
 
         // ============================================================
