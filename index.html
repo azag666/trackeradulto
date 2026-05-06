@@ -433,25 +433,45 @@
         const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         const isPausedFlag = (v) => v === true || v === 1 || v === '1' || v === 'true';
 
-        // Extrai array de uma resposta TF tentando múltiplos caminhos.
-        // Aceita 'a.b.c' como path. Se nada bater, tenta achar QUALQUER array nas
-        // chaves top-level do objeto (último recurso).
+        // Extrai array de uma resposta TF. Aceita:
+        //  - array direto
+        //  - envelopes em paths declarados (e.g. 'result', 'result.campaigns')
+        //  - mapa indexado por ID: { result: { "37968": {...}, "73134": {...} } }
+        //    → converte com Object.values quando as chaves parecem IDs numéricos.
         function tfExtractArray(data, paths) {
             if (Array.isArray(data)) return data;
             if (!data || typeof data !== 'object') return [];
+            const tryAt = (cur) => {
+                if (Array.isArray(cur)) return cur;
+                if (cur && typeof cur === 'object') {
+                    const keys = Object.keys(cur);
+                    if (keys.length > 0 && keys.every(k => /^\d+$/.test(k))) {
+                        // Mapa por ID (puramente numéricas) → vira array de valores
+                        const vals = Object.values(cur).filter(v => v && typeof v === 'object');
+                        if (vals.length === keys.length) return vals;
+                    }
+                }
+                return null;
+            };
             for (const p of paths) {
                 let cur = data, ok = true;
                 for (const part of p.split('.')) {
                     if (cur && typeof cur === 'object' && part in cur) cur = cur[part];
                     else { ok = false; break; }
                 }
-                if (ok && Array.isArray(cur)) return cur;
+                if (ok) {
+                    const got = tryAt(cur);
+                    if (got) return got;
+                }
             }
-            // Último recurso: pega o primeiro array encontrado em data ou data.result
+            // Último recurso: percorre top-level keys procurando array OU mapa-por-id
             const candidates = [data, data.result, data.data].filter(x => x && typeof x === 'object');
             for (const c of candidates) {
+                const got = tryAt(c);
+                if (got) return got;
                 for (const k of Object.keys(c)) {
-                    if (Array.isArray(c[k])) return c[k];
+                    const inner = tryAt(c[k]);
+                    if (inner) return inner;
                 }
             }
             return [];
