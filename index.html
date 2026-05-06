@@ -386,7 +386,7 @@
                 <div>
                     <label class="text-[10px] font-black text-fuchsia-400 uppercase mb-1 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-fuchsia-500"></span> Traffic Factory V2 · API Key</label>
                     <textarea id="token-input-tf" rows="3" placeholder="Cole o token TF aqui (gere em Settings → API Tokens)..." class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 w-full text-white outline-none focus:border-fuchsia-500 font-mono text-xs break-all resize-none"></textarea>
-                    <p class="text-[10px] text-slate-600 mt-1">Header esperado pela API: <code class="text-slate-400">Authorization: &lt;sua_api_key&gt;</code></p>
+                    <p class="text-[10px] text-slate-600 mt-1">Header enviado: <code class="text-slate-400">Authorization: Bearer &lt;sua_api_key&gt;</code> (gere o token em <em>Settings → API Tokens</em> no painel TF)</p>
                 </div>
                 <div class="flex gap-2 justify-between items-center pt-2">
                     <button type="button" onclick="clearToken()" class="text-xs text-red-400 hover:text-red-300 font-bold flex items-center gap-1.5"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Limpar tudo</button>
@@ -462,9 +462,11 @@
 
         async function tfApi(endpoint, method='GET', body=null) {
             // Traffic Factory V2 — base /tf-proxy/ → https://api.trafficfactory.com/v2/
-            // Auth: header `Authorization: <token>` (apiKey, sem prefixo Bearer)
+            // Auth: header `Authorization: Bearer <token>` (mesmo formato que o swagger UI da TF usa)
             if (!TF_TOKEN) throw new Error('Token TF ausente');
-            const opts = { method, headers: { 'Authorization': TF_TOKEN, 'Accept': 'application/json' } };
+            // Aceita o user colando "Bearer xxx" ou só "xxx" — sempre normaliza pra Bearer.
+            const tk = TF_TOKEN.trim().replace(/^Bearer\s+/i, '');
+            const opts = { method, headers: { 'Authorization': `Bearer ${tk}`, 'Accept': 'application/json' } };
             if (body instanceof FormData) opts.body = body;
             else if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
             const res = await fetch(`/tf-proxy/${endpoint}`, opts);
