@@ -21,7 +21,7 @@
                     Traffic Monitor <span class="text-gray-500 font-light text-xl">| TJ Stats</span>
                 </h1>
                 <p class="text-sm text-gray-400 mt-1">
-                    Monitorização direta da API da TrafficJunky (Custos e Volume)
+                    Monitorização direta da API da TrafficJunky (Últimos 30 Dias)
                 </p>
             </div>
             <div class="mt-4 md:mt-0 flex flex-col md:flex-row items-end md:items-center gap-4">
@@ -81,14 +81,14 @@
         <!-- Tabela de Dados -->
         <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden shadow-2xl">
             <div class="p-5 border-b border-gray-800 bg-gray-900/50">
-                <h2 class="text-lg font-semibold text-gray-200">Métricas por Spot / Source ID</h2>
+                <h2 class="text-lg font-semibold text-gray-200">Métricas por Source / Campanha</h2>
             </div>
             
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-sm whitespace-nowrap">
                     <thead class="bg-gray-950/50 text-gray-400 uppercase tracking-wider text-xs">
                         <tr>
-                            <th class="px-6 py-4 font-medium">Source / Spot ID</th>
+                            <th class="px-6 py-4 font-medium">ID / Nome</th>
                             <th class="px-6 py-4 font-medium">Investimento (USD)</th>
                             <th class="px-6 py-4 font-medium text-right">Impressões</th>
                             <th class="px-6 py-4 font-medium text-right">Cliques</th>
@@ -111,17 +111,25 @@
         // Inicializa os ícones do Lucide
         lucide.createIcons();
 
-        // --- CONFIGURAÇÕES DA API ---
+        // --- CONFIGURAÇÕES DA API E DATAS DINÂMICAS ---
         const TJ_TOKEN = '0a5cae844058508f0f70eee015ac6d3a8adfbd670fe1c60f7ac3c3f6f1b51fe975ce183c79f2ac31168cd7fed358165736c9b24fb65cf490f8fcd77549b20691';
         
-        // 🚨 ATENÇÃO: Se a API devolver 404 Not Found, o caminho abaixo está errado na documentação.
-        // Verifique na doc oficial da TJ e substitua este valor:
-        const ENDPOINT_CORRETO = 'api/reports/stats'; 
+        // Calcula as datas automaticamente (Últimos 30 dias)
+        const hoje = new Date();
+        const trintaDiasAtras = new Date();
+        trintaDiasAtras.setDate(hoje.getDate() - 30);
+
+        const formataData = (data) => data.toISOString().split('T')[0]; // Devolve no formato YYYY-MM-DD
+        const startDate = formataData(trintaDiasAtras);
+        const endDate = formataData(hoje);
+
+        // O endpoint corrigido usando .json em vez de {format} e enviando as datas
+        const ENDPOINT_CORRETO = `api/campaigns/stats.json?start_date=${startDate}&end_date=${endDate}`; 
         
-        // Esta URL usa o ficheiro netlify.toml como ponte para evitar bloqueios de CORS
+        // A URL final que passa pelo nosso proxy do Netlify
         const TJ_API_URL = '/tj-proxy/' + ENDPOINT_CORRETO;
 
-        // Dados simulados para teste no navegador caso ocorra algum erro
+        // Dados simulados para garantir que a interface funciona se houver falha
         const mockTJResponse = [
             { spot_id: "SPOT_847291", cost: "105.50", impressions: 50000, clicks: 1200 },
             { spot_id: "SPOT_918233", cost: "65.20", impressions: 32000, clicks: 800 },
@@ -130,7 +138,7 @@
             { spot_id: "SPOT_889900", cost: "250.00", impressions: 95000, clicks: 2800 },
         ];
 
-        // Formatadores
+        // Formatadores numéricos
         const formatCurrency = (value) => {
             return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
         };
@@ -138,7 +146,7 @@
             return new Intl.NumberFormat('pt-PT').format(value);
         };
 
-        // Função principal que comunica com a API
+        // Função principal de comunicação
         async function fetchTJData() {
             const btn = document.getElementById('refresh-btn');
             const icon = document.getElementById('refresh-icon');
@@ -148,11 +156,11 @@
             // Estado de carregamento
             btn.disabled = true;
             icon.classList.add('animate-spin');
-            tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">A obter métricas da TrafficJunky via Netlify...</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">A puxar os dados reais da TrafficJunky (${startDate} até ${endDate})...</td></tr>`;
             warning.classList.add('hidden');
 
             try {
-                // Pedido seguro que passa pelo nosso ficheiro netlify.toml
+                // Pedido que bate no netlify.toml e vai para a TJ
                 const response = await fetch(TJ_API_URL, {
                     method: 'GET',
                     headers: {
@@ -171,52 +179,66 @@
                 renderData(data);
 
             } catch (error) {
-                console.error("================ DETALHES DO ERRO =======================");
-                console.error(error.message);
-                console.error("Se o erro for 404 (Route not found), significa que o ENDPOINT_CORRETO definido no script JS não existe na API da TJ.");
-                console.error("=========================================================");
+                console.error("================ ERRO DA API =======================");
+                console.error("Tentativa de acesso à URL:", TJ_API_URL);
+                console.error("Erro devolvido:", error.message);
+                console.error("====================================================");
                 
-                // Exibe alerta de erro e carrega os dados simulados para a interface não quebrar
                 warning.classList.remove('hidden');
                 warning.classList.add('flex');
                 renderData(mockTJResponse);
             } finally {
-                // Finaliza estado de carregamento
                 btn.disabled = false;
                 icon.classList.remove('animate-spin');
             }
         }
 
-        // Renderiza os dados no ecrã
+        // Função para preencher a tabela com os dados
         function renderData(data) {
             const tbody = document.getElementById('table-body');
             
-            // Verifica se a resposta não veio num formato incorreto
-            if (!data || data.length === 0 || !Array.isArray(data)) {
-                tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">Nenhum dado encontrado ou formato inválido devolvido pela API.</td></tr>`;
+            // A API da TJ costuma devolver um objeto com uma propriedade contendo os arrays.
+            // Se for um array direto, usamos ele. Se vier dentro de algo, tentamos mapear.
+            let dadosFinais = data;
+            if (!Array.isArray(data)) {
+                // Tenta encontrar o primeiro array dentro do objeto JSON que a TJ mandar
+                const chaves = Object.keys(data);
+                for (let chave of chaves) {
+                    if (Array.isArray(data[chave])) {
+                        dadosFinais = data[chave];
+                        break;
+                    }
+                }
+            }
+            
+            if (!dadosFinais || dadosFinais.length === 0 || !Array.isArray(dadosFinais)) {
+                tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">Nenhum dado com gastos encontrado para este período.</td></tr>`;
                 return;
             }
 
             // Ordena pelo maior gasto
-            data.sort((a, b) => parseFloat(b.cost) - parseFloat(a.cost));
+            dadosFinais.sort((a, b) => parseFloat(b.cost || 0) - parseFloat(a.cost || 0));
 
             let totalCost = 0;
             let totalImp = 0;
             let totalClicks = 0;
             let html = '';
 
-            data.forEach(row => {
-                const cost = parseFloat(row.cost) || 0;
-                const imp = parseInt(row.impressions) || 0;
-                const clicks = parseInt(row.clicks) || 0;
+            dadosFinais.forEach(row => {
+                const cost = parseFloat(row.cost || row.spent || 0);
+                const imp = parseInt(row.impressions || row.views || 0);
+                const clicks = parseInt(row.clicks || 0);
 
                 totalCost += cost;
                 totalImp += imp;
                 totalClicks += clicks;
 
+                // Tenta puxar o ID (pode vir como campaign_id, spot_id ou name)
+                const idLabel = row.campaign_id || row.spot_id || row.name || 'Desconhecido';
+
                 html += `
                     <tr class="transition-colors hover:bg-gray-800/50">
-                        <td class="px-6 py-4 font-mono text-gray-300">${row.spot_id || row.source_id || '-'}</td>
+                        <td class="px-6 py-4 font-mono text-gray-300">${idLabel}</td>
                         <td class="px-6 py-4 text-emerald-400 font-medium">${formatCurrency(cost)}</td>
                         <td class="px-6 py-4 text-right text-gray-300">${formatNumber(imp)}</td>
                         <td class="px-6 py-4 text-right text-gray-300">${formatNumber(clicks)}</td>
@@ -224,16 +246,14 @@
                 `;
             });
 
-            // Atualiza a Tabela
+            // Atualiza a Tabela e os Cards
             tbody.innerHTML = html;
-
-            // Atualiza os Cards Superiores
             document.getElementById('total-cost').innerText = formatCurrency(totalCost);
             document.getElementById('total-impressions').innerText = formatNumber(totalImp);
             document.getElementById('total-clicks').innerText = formatNumber(totalClicks);
         }
 
-        // Carrega dados iniciais assim que o ecrã abre
+        // Arranca o processo
         window.onload = fetchTJData;
 
     </script>
