@@ -111,8 +111,8 @@
         // Inicializa os ícones do Lucide
         lucide.createIcons();
 
-        // Configurações
-        const TJ_API_URL = 'https://api.trafficjunky.com/api/reports/stats';
+        // Configurações (Utilizando CORS Proxy para contornar o bloqueio do navegador no MVP)
+        const TJ_API_URL = 'https://corsproxy.io/?' + encodeURIComponent('https://api.trafficjunky.com/api/reports/stats');
         const TJ_TOKEN = '0a5cae844058508f0f70eee015ac6d3a8adfbd670fe1c60f7ac3c3f6f1b51fe975ce183c79f2ac31168cd7fed358165736c9b24fb65cf490f8fcd77549b20691';
 
         // Mock para teste no navegador (quando a requisição real bloqueia por CORS)
