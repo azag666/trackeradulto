@@ -6,6 +6,7 @@
     <title>TJ Command Center | PRO</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         ::-webkit-scrollbar { height: 8px; width: 8px; }
         ::-webkit-scrollbar-track { background: #0f172a; }
@@ -41,6 +42,9 @@
             <div class="flex h-full gap-1">
                 <button onclick="switchTab('dash')" id="tab-dash" class="tab-active px-5 transition-all text-xs font-bold flex items-center gap-2">
                     <i data-lucide="layout-dashboard" class="w-4 h-4"></i> DASHBOARD
+                </button>
+                <button onclick="switchTab('insights')" id="tab-insights" class="tab-inactive px-5 transition-all text-xs font-bold flex items-center gap-2">
+                    <i data-lucide="bar-chart-3" class="w-4 h-4"></i> INSIGHTS
                 </button>
                 <button onclick="switchTab('finance')" id="tab-finance" class="tab-inactive px-5 transition-all text-xs font-bold flex items-center gap-2">
                     <i data-lucide="wallet" class="w-4 h-4"></i> FINANCEIRO
@@ -146,6 +150,106 @@
                         <tbody id="dash-tbody" class="divide-y divide-slate-800/50">
                             <tr><td colspan="9" class="py-20 text-center text-slate-600 font-medium">Conecte sua API para iniciar...</td></tr>
                         </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- INSIGHTS (TF only) -->
+        <div id="view-insights" class="hidden space-y-6">
+            <div class="flex items-center gap-3 bg-slate-900 border border-slate-800 p-3 rounded-2xl flex-wrap">
+                <i data-lucide="bar-chart-3" class="text-fuchsia-500 w-5 h-5"></i>
+                <span class="text-xs font-bold text-slate-400 uppercase">Dimensão</span>
+                <select id="insights-dim" onchange="fetchInsights()" class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 outline-none">
+                    <option value="date">📅 Por Dia (linha)</option>
+                    <option value="hour">🕐 Por Hora</option>
+                    <option value="campaign">🎯 Campanhas</option>
+                    <option value="variation">🖼️ Anúncios / Variations</option>
+                    <option value="landingPage">🔗 Páginas de Destino</option>
+                    <option value="site">🌐 Sites</option>
+                    <option value="zone">📍 Zonas</option>
+                    <option value="category">🏷️ Categorias</option>
+                    <option value="country">🌍 Países</option>
+                    <option value="region">🗺️ Regiões</option>
+                    <option value="device">📱 Dispositivos</option>
+                    <option value="os">💻 Sistemas Operativos</option>
+                    <option value="language">🗣️ Idiomas</option>
+                    <option value="browser">🌐 Navegadores</option>
+                    <option value="carrier">📡 Operadoras</option>
+                    <option value="traffic">🚦 Tipo de Tráfego</option>
+                </select>
+                <span class="text-xs font-bold text-slate-400 uppercase ml-2">Métrica</span>
+                <select id="insights-metric" onchange="renderInsightsChart()" class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 outline-none">
+                    <option value="cost">💰 Gasto</option>
+                    <option value="hits">👁️ Impressões</option>
+                    <option value="clicks">🖱️ Cliques</option>
+                    <option value="conversions">🎯 Conversões</option>
+                    <option value="ctr">📈 CTR</option>
+                    <option value="cpm">📊 eCPM</option>
+                    <option value="avg_cpc">💲 eCPC</option>
+                </select>
+                <input type="date" id="insights-start" class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-300 font-mono ml-2">
+                <span class="text-slate-600">→</span>
+                <input type="date" id="insights-end" class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-300 font-mono">
+                <button onclick="fetchInsights()" class="bg-fuchsia-600 hover:bg-fuchsia-500 text-white px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 ml-auto">
+                    <i data-lucide="refresh-ccw" class="w-3.5 h-3.5"></i> ATUALIZAR
+                </button>
+            </div>
+
+            <!-- KPI cards do total -->
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div class="bg-slate-900 p-4 rounded-2xl border border-slate-800">
+                    <p class="text-slate-500 text-[10px] font-bold uppercase mb-1">Gasto Total</p>
+                    <h3 id="ins-total-cost" class="text-xl font-black text-fuchsia-400">$ 0.00</h3>
+                </div>
+                <div class="bg-slate-900 p-4 rounded-2xl border border-slate-800">
+                    <p class="text-slate-500 text-[10px] font-bold uppercase mb-1">Impressões</p>
+                    <h3 id="ins-total-imp" class="text-xl font-black text-white">0</h3>
+                </div>
+                <div class="bg-slate-900 p-4 rounded-2xl border border-slate-800">
+                    <p class="text-slate-500 text-[10px] font-bold uppercase mb-1">Cliques</p>
+                    <h3 id="ins-total-clicks" class="text-xl font-black text-cyan-400">0</h3>
+                </div>
+                <div class="bg-slate-900 p-4 rounded-2xl border border-slate-800">
+                    <p class="text-slate-500 text-[10px] font-bold uppercase mb-1">CTR Médio</p>
+                    <h3 id="ins-total-ctr" class="text-xl font-black text-indigo-400">0.00%</h3>
+                </div>
+                <div class="bg-slate-900 p-4 rounded-2xl border border-slate-800">
+                    <p class="text-slate-500 text-[10px] font-bold uppercase mb-1">Conversões</p>
+                    <h3 id="ins-total-conv" class="text-xl font-black text-orange-400">0</h3>
+                </div>
+            </div>
+
+            <!-- Gráfico -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+                <div id="ins-chart-wrap" class="relative" style="height:340px;">
+                    <canvas id="ins-chart"></canvas>
+                </div>
+                <div id="ins-chart-empty" class="hidden text-center text-slate-500 py-20">Sem dados pra plotar.</div>
+            </div>
+
+            <!-- Tabela top-N -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+                <div class="p-4 border-b border-slate-800 flex justify-between items-center">
+                    <h3 class="text-sm font-bold text-slate-300 flex items-center gap-2"><i data-lucide="list-ordered" class="w-4 h-4 text-fuchsia-400"></i> Top performance</h3>
+                    <span id="ins-table-count" class="text-[10px] text-slate-500 font-mono"></span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-950 text-slate-500 uppercase font-bold border-b border-slate-800">
+                            <tr>
+                                <th class="px-4 py-3">#</th>
+                                <th class="px-4 py-3" id="ins-th-label">Item</th>
+                                <th class="px-4 py-3 text-right">Imps</th>
+                                <th class="px-4 py-3 text-right">Cliques</th>
+                                <th class="px-4 py-3 text-right">CTR</th>
+                                <th class="px-4 py-3 text-right">eCPM</th>
+                                <th class="px-4 py-3 text-right">eCPC</th>
+                                <th class="px-4 py-3 text-right">Conv</th>
+                                <th class="px-4 py-3 text-right">Gasto</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ins-tbody" class="divide-y divide-slate-800/60"></tbody>
                     </table>
                 </div>
             </div>
@@ -587,7 +691,7 @@
         // TAB NAV
         // ============================================================
         function switchTab(tab) {
-            ['dash','finance','creatives'].forEach(t => {
+            ['dash','insights','finance','creatives'].forEach(t => {
                 document.getElementById('view-'+t).classList.add('hidden');
                 document.getElementById('tab-'+t).className = 'tab-inactive px-5 transition-all text-xs font-bold flex items-center gap-2';
             });
@@ -595,6 +699,7 @@
             document.getElementById('tab-'+tab).className = 'tab-active px-5 transition-all text-xs font-bold flex items-center gap-2';
             if (tab === 'finance') fetchFunds();
             if (tab === 'creatives') populateCreativesFilter();
+            if (tab === 'insights') initInsights();
             lucide.createIcons();
         }
 
@@ -1938,6 +2043,255 @@
                 '<h4 class="font-bold text-sm truncate"',
                 `<div class="text-[9px] text-indigo-400 font-black uppercase tracking-wider mb-1">${campName}</div><h4 class="font-bold text-sm truncate"`
             );
+        }
+
+        // ============================================================
+        // INSIGHTS (TF /statistics/a/<dim>)
+        // ============================================================
+        let _insChart = null;
+        let _insLastRows = [];
+        let _insLastDim = 'date';
+        // Cache de collections (id → name) carregado lazy
+        const _insCollections = {};
+        const _insCollectionEndpointByDim = {
+            os: 'collections/operating-systems',
+            browser: 'collections/browsers',
+            language: 'collections/languages',
+            category: 'collections/categories',
+            device: 'collections/device-types',
+            carrier: 'collections/isps',
+            country: 'collections/countries'
+        };
+
+        function initInsights() {
+            if (activeNetwork !== 'tf') {
+                document.getElementById('view-insights').innerHTML = `
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-500">
+                        <i data-lucide="info" class="w-10 h-10 mx-auto mb-3 text-fuchsia-400"></i>
+                        <h3 class="text-lg font-bold text-white mb-2">Insights só funciona em modo Traffic Factory</h3>
+                        <p class="text-xs">Troque pra TF no switcher do header pra ver gráficos e breakdowns.</p>
+                    </div>`;
+                lucide.createIcons();
+                return;
+            }
+            // Defaults de data: hoje
+            const today = new Date().toISOString().split('T')[0];
+            const past7 = new Date(); past7.setDate(past7.getDate() - 6);
+            const startEl = document.getElementById('insights-start');
+            const endEl = document.getElementById('insights-end');
+            if (!startEl.value) startEl.value = past7.toISOString().split('T')[0];
+            if (!endEl.value) endEl.value = today;
+            fetchInsights();
+        }
+
+        async function fetchInsights() {
+            if (activeNetwork !== 'tf') return;
+            const dim = document.getElementById('insights-dim').value;
+            const startDate = document.getElementById('insights-start').value;
+            const endDate = document.getElementById('insights-end').value;
+            const tbody = document.getElementById('ins-tbody');
+            tbody.innerHTML = `<tr><td colspan="9" class="py-12 text-center"><i data-lucide="loader-2" class="animate-spin w-8 h-8 mx-auto text-fuchsia-500"></i></td></tr>`;
+            lucide.createIcons();
+            try {
+                const data = await tfApi(`statistics/a/${dim}?date-from=${startDate}&date-to=${endDate}&limit=500&detailed=true`);
+                console.log(`[TF /statistics/a/${dim} raw]`, data);
+                const list = tfExtractArray(data, ['result','data']);
+                const total = data?.resultTotal || {};
+                _insLastRows = list.map(r => normalizeInsightsRow(r, dim));
+                _insLastDim = dim;
+                renderInsightsTotals(total, _insLastRows);
+                // Resolve nomes (lazy) pra dimensões com id
+                await resolveInsightsLabels(dim, _insLastRows);
+                renderInsightsChart();
+                renderInsightsTable();
+            } catch (e) {
+                tbody.innerHTML = `<tr><td colspan="9" class="py-12 text-center text-red-400">Erro: ${escapeHtml(e.message)}</td></tr>`;
+                document.getElementById('ins-chart-empty').classList.remove('hidden');
+                document.getElementById('ins-chart-wrap').classList.add('hidden');
+            }
+        }
+
+        function normalizeInsightsRow(r, dim) {
+            const hits = parseInt(r.hits ?? r.impressions) || 0;
+            const clicks = parseInt(r.clicks) || 0;
+            const cost = parseFloat(r.cost ?? r.value) || 0;
+            let conversions = 0;
+            if (r.goals && typeof r.goals === 'object') {
+                conversions = Object.values(r.goals).reduce((a,b) => {
+                    if (typeof b === 'number') return a + b;
+                    if (b && typeof b === 'object') return a + (parseInt(b.count ?? b.conversions ?? b.total) || 0);
+                    return a;
+                }, 0);
+            }
+            // Label específico por dimensão
+            const labelKeys = {
+                date: 'ddate', hour: 'hour',
+                country: 'country', region: 'region_geoname_id',
+                site: 'site_hostname', zone: 'idzone', traffic: 'idtraffic_type',
+                campaign: 'idcampaign', variation: 'idvariation', landingPage: 'idlanding_page',
+                offer: 'idoffer',
+                device: 'iddevice', os: 'idos', browser: 'idbrowser',
+                language: 'idlanguage', category: 'idcategory', carrier: 'idcarrier'
+            };
+            const labelKey = labelKeys[dim] || 'id';
+            const labelRaw = r[labelKey] ?? r.id ?? '?';
+            return {
+                _raw: r,
+                _label: String(labelRaw),
+                _labelResolved: null,
+                hits, clicks, cost, conversions,
+                ctr: parseFloat(r.ctr) || (hits > 0 ? (clicks/hits)*100 : 0),
+                cpm: parseFloat(r.cpm) || (hits > 0 ? (cost/hits)*1000 : 0),
+                avg_cpc: parseFloat(r.avg_cpc ?? r.cpc) || (clicks > 0 ? (cost/clicks) : 0)
+            };
+        }
+
+        async function resolveInsightsLabels(dim, rows) {
+            const ep = _insCollectionEndpointByDim[dim];
+            if (dim === 'campaign') {
+                rows.forEach(r => { r._labelResolved = campaignsCache[r._label]?.name || ('Campanha #'+r._label); });
+                return;
+            }
+            if (dim === 'date' || dim === 'hour' || dim === 'site' || dim === 'region') {
+                // Já vêm com label legível
+                rows.forEach(r => { r._labelResolved = r._label; });
+                return;
+            }
+            if (!ep) return;
+            try {
+                if (!_insCollections[dim]) {
+                    const data = await tfApi(`${ep}?limit=500`);
+                    const list = tfExtractArray(data, ['result','data']);
+                    const map = {};
+                    list.forEach(item => {
+                        const id = item.id ?? item.iddevice ?? item.idos ?? item.idbrowser ?? item.idcategory ?? item.idlanguage ?? item.idcarrier;
+                        const name = item.name ?? item.short_name ?? item.long_name ?? item.label ?? item.value;
+                        if (id != null && name) map[String(id)] = name;
+                    });
+                    _insCollections[dim] = map;
+                }
+                rows.forEach(r => { r._labelResolved = _insCollections[dim][r._label] || r._label; });
+            } catch (e) {
+                console.warn(`Falha ao resolver labels de ${dim}:`, e.message);
+                rows.forEach(r => { r._labelResolved = r._label; });
+            }
+        }
+
+        function renderInsightsTotals(total, rows) {
+            const sum = (k) => rows.reduce((a,b) => a + (b[k] || 0), 0);
+            const totHits = parseInt(total.hits ?? total.impressions) || sum('hits');
+            const totClicks = parseInt(total.clicks) || sum('clicks');
+            const totCost = parseFloat(total.cost ?? total.value) || sum('cost');
+            const totConv = sum('conversions');
+            const ctr = totHits > 0 ? (totClicks / totHits) * 100 : 0;
+            document.getElementById('ins-total-cost').innerText = formatUSDPrec(totCost);
+            document.getElementById('ins-total-imp').innerText = formatNumber(totHits);
+            document.getElementById('ins-total-clicks').innerText = formatNumber(totClicks);
+            document.getElementById('ins-total-ctr').innerText = formatPct(ctr);
+            document.getElementById('ins-total-conv').innerText = formatNumber(totConv);
+        }
+
+        function renderInsightsChart() {
+            const metric = document.getElementById('insights-metric').value;
+            const rows = _insLastRows.slice();
+            const dim = _insLastDim;
+            const wrap = document.getElementById('ins-chart-wrap');
+            const empty = document.getElementById('ins-chart-empty');
+
+            if (rows.length === 0) {
+                empty.classList.remove('hidden');
+                wrap.classList.add('hidden');
+                if (_insChart) { _insChart.destroy(); _insChart = null; }
+                return;
+            }
+            empty.classList.add('hidden');
+            wrap.classList.remove('hidden');
+
+            // Labels e valores
+            let labels, values, type;
+            if (dim === 'date') {
+                rows.sort((a,b) => String(a._label).localeCompare(String(b._label)));
+                labels = rows.map(r => r._labelResolved || r._label);
+                type = 'line';
+            } else if (dim === 'hour') {
+                rows.sort((a,b) => parseInt(a._label) - parseInt(b._label));
+                labels = rows.map(r => `${String(r._label).padStart(2,'0')}h`);
+                type = 'bar';
+            } else {
+                // Top 15 by metric
+                rows.sort((a,b) => (b[metric] || 0) - (a[metric] || 0));
+                rows.splice(15);
+                labels = rows.map(r => (r._labelResolved || r._label).toString().slice(0, 28));
+                type = 'bar';
+            }
+            values = rows.map(r => r[metric] || 0);
+
+            const colors = {
+                cost: '#d946ef', hits: '#e2e8f0', clicks: '#22d3ee',
+                conversions: '#f97316', ctr: '#a78bfa', cpm: '#10b981', avg_cpc: '#10b981'
+            };
+            const color = colors[metric] || '#d946ef';
+            const ctx = document.getElementById('ins-chart').getContext('2d');
+            if (_insChart) _insChart.destroy();
+            _insChart = new Chart(ctx, {
+                type,
+                data: {
+                    labels,
+                    datasets: [{
+                        label: metric.toUpperCase(),
+                        data: values,
+                        backgroundColor: type === 'line' ? color + '33' : color + 'cc',
+                        borderColor: color,
+                        borderWidth: 2,
+                        tension: 0.3,
+                        fill: type === 'line',
+                        pointRadius: type === 'line' ? 3 : 0,
+                        pointBackgroundColor: color
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#94a3b8', font: { size: 11 } } },
+                        tooltip: { backgroundColor: '#0f172a', borderColor: '#334155', borderWidth: 1 }
+                    },
+                    scales: {
+                        x: { grid: { color: '#1e293b' }, ticks: { color: '#64748b', font: { size: 10 }, maxRotation: 45 } },
+                        y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b', font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        function renderInsightsTable() {
+            const tbody = document.getElementById('ins-tbody');
+            const rows = _insLastRows.slice().sort((a,b) => b.cost - a.cost).slice(0, 50);
+            document.getElementById('ins-table-count').innerText = `${_insLastRows.length} itens (top 50 por gasto)`;
+            const labels = {
+                date: 'Data', hour: 'Hora', campaign: 'Campanha', variation: 'Anúncio',
+                landingPage: 'Página', site: 'Site', zone: 'Zona', category: 'Categoria',
+                country: 'País', region: 'Região', device: 'Dispositivo', os: 'SO',
+                language: 'Idioma', browser: 'Navegador', carrier: 'Operadora', traffic: 'Tipo de Tráfego', offer: 'Oferta'
+            };
+            document.getElementById('ins-th-label').innerText = labels[_insLastDim] || 'Item';
+            if (rows.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" class="py-12 text-center text-slate-500">Sem dados.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = rows.map((r, i) => `
+                <tr class="hover:bg-slate-900/40">
+                    <td class="px-4 py-3 text-slate-600 font-mono">${i+1}</td>
+                    <td class="px-4 py-3 text-slate-200 font-bold">${escapeHtml(r._labelResolved || r._label)}</td>
+                    <td class="px-4 py-3 text-right text-slate-300 font-mono">${formatNumber(r.hits)}</td>
+                    <td class="px-4 py-3 text-right text-cyan-400 font-mono">${formatNumber(r.clicks)}</td>
+                    <td class="px-4 py-3 text-right text-indigo-300 font-mono">${formatPct(r.ctr)}</td>
+                    <td class="px-4 py-3 text-right text-emerald-400 font-mono">${formatUSDPrec(r.cpm)}</td>
+                    <td class="px-4 py-3 text-right text-emerald-400 font-mono">${formatUSDPrec(r.avg_cpc)}</td>
+                    <td class="px-4 py-3 text-right text-orange-400 font-mono">${formatNumber(r.conversions)}</td>
+                    <td class="px-4 py-3 text-right text-fuchsia-400 font-mono font-bold">${formatUSDPrec(r.cost)}</td>
+                </tr>
+            `).join('');
         }
 
         // ============================================================
