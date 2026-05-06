@@ -24,9 +24,9 @@
                     Monitoramento direto da API da TrafficJunky (Custos e Volume)
                 </p>
             </div>
-            <div class="mt-4 md:mt-0 flex items-center gap-4">
+            <div class="mt-4 md:mt-0 flex flex-col md:flex-row items-end md:items-center gap-4">
                 <span id="cors-warning" class="hidden text-xs bg-yellow-500/10 text-yellow-500 px-3 py-1 rounded-full border border-yellow-500/20 flex items-center gap-1">
-                    <i data-lucide="alert-circle" class="w-4 h-4"></i> Modo Simulado Ativo (CORS)
+                    <i data-lucide="alert-circle" class="w-4 h-4"></i> Modo Simulado Ativo (Verifique o Console)
                 </span>
                 <button 
                     onclick="fetchTJData()"
@@ -111,11 +111,17 @@
         // Inicializa os ícones do Lucide
         lucide.createIcons();
 
-        // Configurações (Utilizando CORS Proxy para contornar o bloqueio do navegador no MVP)
-        const TJ_API_URL = 'https://corsproxy.io/?' + encodeURIComponent('https://api.trafficjunky.com/api/reports/stats');
+        // --- CONFIGURAÇÕES DA API ---
         const TJ_TOKEN = '0a5cae844058508f0f70eee015ac6d3a8adfbd670fe1c60f7ac3c3f6f1b51fe975ce183c79f2ac31168cd7fed358165736c9b24fb65cf490f8fcd77549b20691';
+        
+        // A URL original que você quer consultar
+        const ORIGINAL_TJ_URL = 'https://api.trafficjunky.com/api/reports/stats';
+        
+        // Trocando para um proxy mais robusto e livre de encodeURIComponent
+        const PROXY_URL = 'https://api.codetabs.com/v1/proxy?quest=';
+        const TJ_API_URL = PROXY_URL + ORIGINAL_TJ_URL;
 
-        // Mock para teste no navegador (quando a requisição real bloqueia por CORS)
+        // Mock para teste no navegador (quando a requisição falhar)
         const mockTJResponse = [
             { spot_id: "SPOT_847291", cost: "105.50", impressions: 50000, clicks: 1200 },
             { spot_id: "SPOT_918233", cost: "65.20", impressions: 32000, clicks: 800 },
@@ -157,15 +163,21 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error(`Erro: ${response.status}`);
+                    // Captura o corpo do erro da API para debug (Crucial para entender o 404)
+                    const errorText = await response.text();
+                    throw new Error(`Status: ${response.status} | Resposta: ${errorText}`);
                 }
 
                 const data = await response.json();
                 renderData(data);
 
             } catch (error) {
-                console.warn("Aviso: Falha ao conectar com API TJ. Utilizando dados simulados.", error);
-                // Exibe alerta de CORS e carrega mock
+                console.error("================ DETALHES DO ERRO DA API ================");
+                console.error(error.message);
+                console.error("1. Se o Status for 404 e a Resposta disser 'Not Found', o endpoint 'https://api.trafficjunky.com/api/reports/stats' pode exigir parâmetros de data na URL (ex: ?start_date=2024-01-01) ou a URL da doc da TJ mudou.");
+                console.error("=========================================================");
+                
+                // Exibe alerta de erro e carrega mock
                 warning.classList.remove('hidden');
                 warning.classList.add('flex');
                 renderData(mockTJResponse);
@@ -180,8 +192,9 @@
         function renderData(data) {
             const tbody = document.getElementById('table-body');
             
-            if (!data || data.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">Nenhum dado encontrado.</td></tr>`;
+            // Verifica se a resposta não veio em formato incorreto
+            if (!data || data.length === 0 || !Array.isArray(data)) {
+                tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">Nenhum dado encontrado ou formato inválido retornado pela API.</td></tr>`;
                 return;
             }
 
@@ -204,7 +217,7 @@
 
                 html += `
                     <tr class="transition-colors hover:bg-gray-800/50">
-                        <td class="px-6 py-4 font-mono text-gray-300">${row.spot_id || '-'}</td>
+                        <td class="px-6 py-4 font-mono text-gray-300">${row.spot_id || row.source_id || '-'}</td>
                         <td class="px-6 py-4 text-emerald-400 font-medium">${formatCurrency(cost)}</td>
                         <td class="px-6 py-4 text-right text-gray-300">${formatNumber(imp)}</td>
                         <td class="px-6 py-4 text-right text-gray-300">${formatNumber(clicks)}</td>
