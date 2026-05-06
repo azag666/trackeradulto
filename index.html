@@ -465,16 +465,66 @@
             try { return text ? JSON.parse(text) : { success: true }; } catch { return { raw: text }; }
         }
 
+        // === TF SESSION (api_token → session token via POST /login) ===
+        // Doc + auth.js do swagger TF mostram que api_token persistente NÃO vai
+        // direto no header. Você manda POST /login com body {api_token: "..."},
+        // recebe {token, type:"Bearer", expires_in}, e usa esse session token
+        // como Authorization: Bearer <session_token> nas chamadas seguintes.
+        let tfSession = (() => {
+            try { return JSON.parse(sessionStorage.getItem('tf_session') || 'null'); } catch { return null; }
+        })();
+
+        async function tfLogin() {
+            const apiToken = (TF_TOKEN || '').trim().replace(/^Bearer\s+/i, '');
+            if (!apiToken) throw new Error('API token TF ausente');
+            const res = await fetch('/tf-proxy/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ api_token: apiToken })
+            });
+            const text = await res.text();
+            if (!res.ok) throw new Error(`Login TF falhou (${res.status}): ${text.slice(0,200)}`);
+            let data; try { data = JSON.parse(text); } catch { throw new Error('Resposta de login não-JSON'); }
+            if (!data.token) throw new Error('Login TF retornou sem token');
+            tfSession = {
+                token: data.token,
+                type: data.type || 'Bearer',
+                expires_at: Date.now() + (parseInt(data.expires_in) || 3600) * 1000 - 30000, // 30s margem
+                refresh_token: data.refresh_token
+            };
+            sessionStorage.setItem('tf_session', JSON.stringify(tfSession));
+            return tfSession;
+        }
+
+        async function ensureTfSession() {
+            if (!tfSession || !tfSession.token || Date.now() >= (tfSession.expires_at || 0)) {
+                await tfLogin();
+            }
+            return tfSession;
+        }
+
         async function tfApi(endpoint, method='GET', body=null) {
             // Traffic Factory V2 — base /tf-proxy/ → https://api.trafficfactory.com/v2/
-            // Auth: header `Authorization: Bearer <token>` (mesmo formato que o swagger UI da TF usa)
             if (!TF_TOKEN) throw new Error('Token TF ausente');
-            // Aceita o user colando "Bearer xxx" ou só "xxx" — sempre normaliza pra Bearer.
-            const tk = TF_TOKEN.trim().replace(/^Bearer\s+/i, '');
-            const opts = { method, headers: { 'Authorization': `Bearer ${tk}`, 'Accept': 'application/json' } };
+            const sess = await ensureTfSession();
+            const opts = {
+                method,
+                headers: {
+                    'Authorization': `${sess.type || 'Bearer'} ${sess.token}`,
+                    'Accept': 'application/json'
+                }
+            };
             if (body instanceof FormData) opts.body = body;
             else if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
-            const res = await fetch(`/tf-proxy/${endpoint}`, opts);
+            let res = await fetch(`/tf-proxy/${endpoint}`, opts);
+            // Se 401, sessão expirou meio do caminho — relogar e retry 1x
+            if (res.status === 401) {
+                tfSession = null;
+                sessionStorage.removeItem('tf_session');
+                const sess2 = await ensureTfSession();
+                opts.headers['Authorization'] = `${sess2.type || 'Bearer'} ${sess2.token}`;
+                res = await fetch(`/tf-proxy/${endpoint}`, opts);
+            }
             const text = await res.text();
             if (!res.ok) throw new Error(`${res.status}: ${text.slice(0,200)}`);
             try { return text ? JSON.parse(text) : { success: true }; } catch { return { raw: text }; }
@@ -1620,6 +1670,8 @@
             else { localStorage.removeItem('tj_token'); TJ_TOKEN = ''; }
             if (tf) { localStorage.setItem('tf_token', tf); TF_TOKEN = tf; }
             else { localStorage.removeItem('tf_token'); TF_TOKEN = ''; }
+            // TF: limpa session anterior pra forçar novo login com api_token novo
+            sessionStorage.removeItem('tf_session'); tfSession = null;
             closeModal('token-modal');
             showToast('Tokens salvos. Carregando...');
             campaignsCache = {};
@@ -1632,8 +1684,10 @@
             if (!confirm('Apagar AMBOS tokens salvos neste navegador?')) return;
             localStorage.removeItem('tj_token');
             localStorage.removeItem('tf_token');
+            sessionStorage.removeItem('tf_session');
             TJ_TOKEN = '';
             TF_TOKEN = '';
+            tfSession = null;
             document.getElementById('token-input-tj').value = '';
             document.getElementById('token-input-tf').value = '';
             showToast('Tokens removidos', 'warn');
@@ -1648,22 +1702,54 @@
                 out.className = 'text-[10px] font-mono bg-slate-950 border border-yellow-500/30 text-yellow-300 rounded-lg p-3 max-h-48 overflow-auto whitespace-pre-wrap break-all';
                 return;
             }
-            // Mostra info pré-request
             const preview = tokenRaw.length > 16 ? `${tokenRaw.slice(0,8)}...${tokenRaw.slice(-4)}` : '(curto)';
             const trimmed = tokenRaw.replace(/^Bearer\s+/i, '');
-            const headerSent = net === 'tj' ? `Bearer ${trimmed}` : `Bearer ${trimmed}`;
-            const url = net === 'tj' ? '/tj-proxy/api/member.json' : '/tf-proxy/user';
-            out.textContent = `[${net.toUpperCase()}] Testando...\nURL: ${url}\nToken: ${preview} (${tokenRaw.length} chars)\nHeader: Authorization: Bearer <token>\n`;
+
+            if (net === 'tj') {
+                const url = '/tj-proxy/api/member.json';
+                out.textContent = `[TJ] URL: ${url}\nToken: ${preview} (${tokenRaw.length} chars)\nHeader: Authorization: Bearer <token>\n`;
+                out.className = 'text-[10px] font-mono bg-slate-950 border border-slate-800 text-slate-300 rounded-lg p-3 max-h-48 overflow-auto whitespace-pre-wrap break-all';
+                try {
+                    const res = await fetch(url, { headers: { 'Authorization': `Bearer ${trimmed}`, 'Accept': 'application/json' } });
+                    const text = await res.text();
+                    out.textContent += `\nHTTP ${res.status}\nBody:\n${text.slice(0,500)}`;
+                    out.className = `text-[10px] font-mono bg-slate-950 border ${res.ok ? 'border-emerald-500/30 text-emerald-300' : 'border-red-500/30 text-red-300'} rounded-lg p-3 max-h-48 overflow-auto whitespace-pre-wrap break-all`;
+                } catch (e) {
+                    out.textContent += `\nERRO: ${e.message}`;
+                    out.className = 'text-[10px] font-mono bg-slate-950 border border-red-500/30 text-red-300 rounded-lg p-3 max-h-48 overflow-auto whitespace-pre-wrap break-all';
+                }
+                return;
+            }
+
+            // TF: testa fluxo completo (POST /login com api_token, depois GET /user)
+            out.textContent = `[TF] Testando fluxo de 2 etapas...\n` +
+                `Token: ${preview} (${tokenRaw.length} chars)\n` +
+                `Etapa 1: POST /tf-proxy/login  body={api_token: "..."}\n`;
             out.className = 'text-[10px] font-mono bg-slate-950 border border-slate-800 text-slate-300 rounded-lg p-3 max-h-48 overflow-auto whitespace-pre-wrap break-all';
             try {
-                const res = await fetch(url, { headers: { 'Authorization': headerSent, 'Accept': 'application/json' } });
-                const text = await res.text();
-                const ok = res.ok;
-                const headersList = [];
-                res.headers.forEach((v,k) => headersList.push(`  ${k}: ${v}`));
-                out.textContent += `\nHTTP ${res.status} ${res.statusText}\n${headersList.slice(0,8).join('\n')}\n\nBody (primeiros 800 chars):\n${text.slice(0,800)}`;
-                out.className = `text-[10px] font-mono bg-slate-950 border ${ok ? 'border-emerald-500/30 text-emerald-300' : 'border-red-500/30 text-red-300'} rounded-lg p-3 max-h-48 overflow-auto whitespace-pre-wrap break-all`;
-                console.log(`[${net.toUpperCase()} test]`, { status: res.status, body: text });
+                const r1 = await fetch('/tf-proxy/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ api_token: trimmed })
+                });
+                const t1 = await r1.text();
+                out.textContent += `→ HTTP ${r1.status}\n  ${t1.slice(0,300)}\n\n`;
+                if (!r1.ok) {
+                    out.className = 'text-[10px] font-mono bg-slate-950 border border-red-500/30 text-red-300 rounded-lg p-3 max-h-48 overflow-auto whitespace-pre-wrap break-all';
+                    return;
+                }
+                let data; try { data = JSON.parse(t1); } catch {}
+                const sess = data?.token;
+                if (!sess) {
+                    out.textContent += `Sem campo "token" na resposta do login.`;
+                    out.className = 'text-[10px] font-mono bg-slate-950 border border-yellow-500/30 text-yellow-300 rounded-lg p-3 max-h-48 overflow-auto whitespace-pre-wrap break-all';
+                    return;
+                }
+                out.textContent += `Etapa 2: GET /tf-proxy/user com Authorization: Bearer <session_token>\n`;
+                const r2 = await fetch('/tf-proxy/user', { headers: { 'Authorization': `${data.type||'Bearer'} ${sess}`, 'Accept': 'application/json' } });
+                const t2 = await r2.text();
+                out.textContent += `→ HTTP ${r2.status}\n  ${t2.slice(0,500)}`;
+                out.className = `text-[10px] font-mono bg-slate-950 border ${r2.ok ? 'border-emerald-500/30 text-emerald-300' : 'border-red-500/30 text-red-300'} rounded-lg p-3 max-h-48 overflow-auto whitespace-pre-wrap break-all`;
             } catch (e) {
                 out.textContent += `\nERRO de fetch: ${e.message}`;
                 out.className = 'text-[10px] font-mono bg-slate-950 border border-red-500/30 text-red-300 rounded-lg p-3 max-h-48 overflow-auto whitespace-pre-wrap break-all';
