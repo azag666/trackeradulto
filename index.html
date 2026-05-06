@@ -114,12 +114,9 @@
         // --- CONFIGURAÇÕES DA API ---
         const TJ_TOKEN = '0a5cae844058508f0f70eee015ac6d3a8adfbd670fe1c60f7ac3c3f6f1b51fe975ce183c79f2ac31168cd7fed358165736c9b24fb65cf490f8fcd77549b20691';
         
-        // A URL original que você quer consultar
-        const ORIGINAL_TJ_URL = 'https://api.trafficjunky.com/api/reports/stats';
-        
-        // Trocando para um proxy mais robusto e livre de encodeURIComponent
-        const PROXY_URL = 'https://api.codetabs.com/v1/proxy?quest=';
-        const TJ_API_URL = PROXY_URL + ORIGINAL_TJ_URL;
+        // Utilizando a solução de Proxy nativa do Netlify (Netlify Rewrites)
+        // Isso requer que exista um arquivo chamado '_redirects' na raiz do projeto.
+        const TJ_API_URL = '/api/tj/reports/stats';
 
         // Mock para teste no navegador (quando a requisição falhar)
         const mockTJResponse = [
@@ -148,11 +145,11 @@
             // Estado de carregamento
             btn.disabled = true;
             icon.classList.add('animate-spin');
-            tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">Buscando métricas da TrafficJunky...</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">Buscando métricas da TrafficJunky via Netlify Proxy...</td></tr>`;
             warning.classList.add('hidden');
 
             try {
-                // Requisição real
+                // Requisição passando pelo Netlify Rewrite
                 const response = await fetch(TJ_API_URL, {
                     method: 'GET',
                     headers: {
@@ -163,7 +160,6 @@
                 });
 
                 if (!response.ok) {
-                    // Captura o corpo do erro da API para debug (Crucial para entender o 404)
                     const errorText = await response.text();
                     throw new Error(`Status: ${response.status} | Resposta: ${errorText}`);
                 }
@@ -172,9 +168,9 @@
                 renderData(data);
 
             } catch (error) {
-                console.error("================ DETALHES DO ERRO DA API ================");
+                console.error("================ DETALHES DO ERRO =======================");
                 console.error(error.message);
-                console.error("1. Se o Status for 404 e a Resposta disser 'Not Found', o endpoint 'https://api.trafficjunky.com/api/reports/stats' pode exigir parâmetros de data na URL (ex: ?start_date=2024-01-01) ou a URL da doc da TJ mudou.");
+                console.error("Se deu erro 404, significa que o arquivo '_redirects' não foi criado ou não foi enviado para o Netlify junto com o HTML.");
                 console.error("=========================================================");
                 
                 // Exibe alerta de erro e carrega mock
