@@ -1625,28 +1625,60 @@
             const grid = document.getElementById('creatives-grid');
             const camp = document.getElementById('creatives-camp-filter').value;
 
-            // === TF: ignora seletor de campanha; lista a biblioteca global ===
+            // === TF: lista variations de TODAS campanhas + biblioteca global ===
             if (activeNetwork === 'tf') {
                 grid.innerHTML = `<div class="col-span-full py-20 text-center"><i data-lucide="loader-2" class="animate-spin w-10 h-10 mx-auto text-fuchsia-500"></i></div>`;
                 lucide.createIcons();
                 try {
+                    if (Object.keys(campaignsCache).length === 0) await fetchCampaignsList();
+                    const ids = Object.keys(campaignsCache);
+
+                    // 1) Library global (pode estar vazia)
                     const [filesR, htmlR] = await Promise.allSettled([
-                        tfApi('library/file?limit=100'),
-                        tfApi('library/html?limit=100')
+                        tfApi('library/file?limit=200'),
+                        tfApi('library/html?limit=200')
                     ]);
                     if (filesR.status === 'fulfilled') console.log('[TF /library/file raw]', filesR.value);
                     if (htmlR.status === 'fulfilled') console.log('[TF /library/html raw]', htmlR.value);
-                    const files = filesR.status === 'fulfilled' ? tfExtractArray(filesR.value, ['result','data','result.files','files']) : [];
-                    const htmls = htmlR.status === 'fulfilled' ? tfExtractArray(htmlR.value, ['result','data','result.htmls','htmls']) : [];
-                    const all = [
-                        ...(Array.isArray(files) ? files : []).map(f => ({ ...f, _kind: 'file' })),
-                        ...(Array.isArray(htmls) ? htmls : []).map(f => ({ ...f, _kind: 'html' }))
+                    const files = filesR.status === 'fulfilled' ? tfExtractArray(filesR.value, ['result','data','files']) : [];
+                    const htmls = htmlR.status === 'fulfilled' ? tfExtractArray(htmlR.value, ['result','data','htmls']) : [];
+
+                    // 2) Variations por campanha (em chunks de 4 paralelas)
+                    const variations = [];
+                    for (let i = 0; i < ids.length; i += 4) {
+                        const chunk = ids.slice(i, i + 4);
+                        const results = await Promise.allSettled(chunk.map(id => tfApi(`campaigns/${id}/variation`)));
+                        results.forEach((r, k) => {
+                            if (r.status === 'fulfilled') {
+                                const id = chunk[k];
+                                if (i === 0 && k === 0) console.log('[TF /campaigns/{id}/variation raw]', r.value);
+                                const list = tfExtractArray(r.value, ['variations','result.variations','result','data']);
+                                list.forEach(v => variations.push({ ...v, _camp_id: id, _camp_name: campaignsCache[id]?.name }));
+                            }
+                        });
+                    }
+
+                    const allItems = [
+                        ...files.map(f => ({ ...f, _kind: 'file' })),
+                        ...htmls.map(f => ({ ...f, _kind: 'html' })),
+                        ...variations.map(v => ({ ...v, _kind: 'variation' }))
                     ];
-                    if (all.length === 0) {
-                        grid.innerHTML = `<div class="col-span-full py-20 text-center text-slate-500">Biblioteca TF vazia ou sem permissão.</div>`;
+
+                    if (allItems.length === 0) {
+                        grid.innerHTML = `<div class="col-span-full py-12 px-6 text-left">
+                            <div class="text-yellow-400 font-bold mb-2">Nenhum criativo encontrado.</div>
+                            <div class="text-[10px] text-slate-500">Tentamos: /library/file, /library/html e /campaigns/{id}/variation pra todas as ${ids.length} campanhas. Vê o console pros logs raw.</div>
+                        </div>`;
                         return;
                     }
-                    grid.innerHTML = all.map(c => renderTFLibraryCard(c)).join('');
+
+                    // Header com contadores
+                    const counts = `<div class="col-span-full flex gap-3 text-[11px] mb-2">
+                        <span class="bg-fuchsia-500/10 text-fuchsia-300 px-3 py-1 rounded-full">${variations.length} variations</span>
+                        <span class="bg-indigo-500/10 text-indigo-300 px-3 py-1 rounded-full">${files.length} files</span>
+                        <span class="bg-cyan-500/10 text-cyan-300 px-3 py-1 rounded-full">${htmls.length} html</span>
+                    </div>`;
+                    grid.innerHTML = counts + allItems.map(c => renderTFLibraryCard(c)).join('');
                     lucide.createIcons();
                 } catch (e) {
                     grid.innerHTML = `<div class="col-span-full py-20 text-center text-red-400">Erro: ${escapeHtml(e.message)}</div>`;
@@ -1710,25 +1742,45 @@
         }
 
         function renderTFLibraryCard(c) {
-            const id = safeStr(c.id ?? c.id_file ?? c.id_html, '?');
-            const name = safeStr(c.name || c.filename || c.title, `Asset #${id}`);
-            const url = safeStr(c.url || c.preview_url || c.thumbnail_url || c.file_url, '');
             const kind = c._kind || 'file';
-            const tags = Array.isArray(c.user_tags) ? c.user_tags.join(', ') : (c.user_tags || '');
-            const archived = c.archived === true || c.is_archived === true;
+            // Variations: id=idvariation, image=imgurl, dest=durl, name, idcampaign, calculated_status, active
+            // Library file: id, type (image/video), url, file_name, file_extension, status
+            // Library html: id, name, url, status
+            const id = safeStr(c.idvariation ?? c.id ?? c.id_file ?? c.id_html, '?');
+            const name = safeStr(c.name || c.file_name || c.title || c.brand, `Asset #${id}`);
+            const imgUrl = safeStr(c.imgurl || c.url || c.preview_url || c.thumbnail_url, '');
+            const destUrl = safeStr(c.durl || c.click_url || c.target_url, '');
+            const archived = c.active === 0 || c.archived === true || c.is_archived === true;
+            const calcStatus = (c.calculated_status || '').toString().toLowerCase();
+            const isPaused = calcStatus.includes('paus') || calcStatus.includes('stop');
+            const kindLabel = kind === 'variation' ? 'AD' : kind === 'html' ? 'HTML5' : 'FILE';
+            const kindClass = kind === 'variation'
+                ? 'bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30'
+                : kind === 'html'
+                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
+                    : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30';
+            const statusBadge = (() => {
+                if (archived) return `<span class="absolute top-2 right-2 bg-slate-800 text-slate-400 text-[9px] font-black uppercase px-2 py-1 rounded">arquivado</span>`;
+                if (isPaused) return `<span class="absolute top-2 right-2 bg-red-500/20 text-red-300 border border-red-500/30 text-[9px] font-black uppercase px-2 py-1 rounded">pausado</span>`;
+                if (c.active === 1 || c.status === 1) return `<span class="absolute top-2 right-2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[9px] font-black uppercase px-2 py-1 rounded">ativo</span>`;
+                if (c.calculated_status) return `<span class="absolute top-2 right-2 bg-slate-700 text-slate-300 text-[9px] font-black uppercase px-2 py-1 rounded" title="${escapeHtml(c.calculated_status)}">${escapeHtml(c.calculated_status.slice(0,12))}</span>`;
+                return '';
+            })();
+            const campLabel = c._camp_name ? `<div class="text-[9px] text-fuchsia-400 font-black uppercase tracking-wider mb-1 truncate">${escapeHtml(c._camp_name)}</div>` : '';
             return `
                 <div class="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden flex flex-col">
                     <div class="h-40 bg-slate-900 relative">
-                        ${url
-                            ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img src="${escapeHtml(url)}" class="w-full h-full object-contain bg-slate-950 opacity-90 hover:opacity-100 transition-opacity" loading="lazy" onerror="this.parentElement.innerHTML='<div class=&quot;w-full h-full flex items-center justify-center text-slate-700&quot;><svg width=&quot;28&quot; height=&quot;28&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;2&quot;><rect x=&quot;3&quot; y=&quot;3&quot; width=&quot;18&quot; height=&quot;18&quot; rx=&quot;2&quot;/></svg></div>'"></a>`
-                            : `<div class="w-full h-full flex items-center justify-center text-slate-700"><i data-lucide="${kind === 'html' ? 'code-2' : 'image'}" class="w-10 h-10"></i></div>`}
-                        <span class="absolute top-2 left-2 inline-flex items-center gap-1.5 bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 px-2 py-1 rounded-full text-[10px] font-bold uppercase">${kind === 'html' ? 'HTML5' : 'FILE'}</span>
-                        ${archived ? `<span class="absolute top-2 right-2 bg-slate-800 text-slate-400 text-[9px] font-black uppercase px-2 py-1 rounded">arquivado</span>` : ''}
+                        ${imgUrl
+                            ? `<a href="${escapeHtml(imgUrl)}" target="_blank" rel="noopener"><img src="${escapeHtml(imgUrl)}" class="w-full h-full object-contain bg-slate-950 opacity-90 hover:opacity-100 transition-opacity" loading="lazy" onerror="this.parentElement.innerHTML='<div class=&quot;w-full h-full flex flex-col items-center justify-center text-slate-700 gap-1&quot;><svg width=&quot;28&quot; height=&quot;28&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;2&quot;><rect x=&quot;3&quot; y=&quot;3&quot; width=&quot;18&quot; height=&quot;18&quot; rx=&quot;2&quot;/></svg><span class=&quot;text-[9px] font-bold&quot;>imagem inacessível</span></div>'"></a>`
+                            : `<div class="w-full h-full flex flex-col items-center justify-center text-slate-700 gap-1"><i data-lucide="${kind === 'html' ? 'code-2' : 'image-off'}" class="w-7 h-7"></i><span class="text-[9px] font-bold">sem imagem</span></div>`}
+                        <span class="absolute top-2 left-2 inline-flex items-center gap-1.5 ${kindClass} border px-2 py-1 rounded-full text-[10px] font-bold uppercase">${kindLabel}</span>
+                        ${statusBadge}
                     </div>
                     <div class="p-3 space-y-2 flex-1 flex flex-col">
+                        ${campLabel}
                         <h4 class="font-bold text-sm truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</h4>
-                        ${tags ? `<div class="text-[10px] text-slate-500 truncate">${escapeHtml(tags)}</div>` : ''}
-                        <div class="text-[10px] font-mono text-slate-600 mt-auto pt-2 border-t border-slate-800">ID: #${id}</div>
+                        ${destUrl ? `<a href="${escapeHtml(destUrl)}" target="_blank" rel="noopener" class="text-[10px] text-slate-500 hover:text-indigo-400 font-mono truncate block">${escapeHtml(destUrl)}</a>` : ''}
+                        <div class="text-[10px] font-mono text-slate-600 mt-auto pt-2 border-t border-slate-800">ID: #${id}${c.idcampaign ? ` · camp #${c.idcampaign}` : ''}</div>
                     </div>
                 </div>`;
         }
