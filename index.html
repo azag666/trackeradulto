@@ -2160,35 +2160,44 @@
                 return;
             }
             if (dim === 'site') {
-                // site_hostname pode vir vazio; usa hostname se tiver, senão fallback
-                rows.forEach(r => {
-                    const host = r._raw.site_hostname || r._raw.hostname;
-                    r._labelResolved = host || `Site #${r._raw.idsite ?? r._raw.id ?? '?'}`;
-                });
-                // Tenta enriquecer via /sites (chama uma vez por sessão)
+                // Tenta enriquecer via /sites listing
                 try {
                     if (!_insCollections.site) {
                         const data = await tfApi('sites?limit=500');
+                        console.log('[TF /sites raw]', data);
                         const list = tfExtractArray(data, ['result','data']);
                         const map = {};
+                        let firstHost = null;
                         list.forEach(s => {
                             const id = s.id ?? s.idsite;
                             const name = s.hostname || s.url || s.name;
-                            if (id != null && name) map[String(id)] = name;
+                            if (id != null && name) { map[String(id)] = name; if (!firstHost) firstHost = name; }
                         });
                         _insCollections.site = map;
+                        _insCollections.siteFallback = firstHost;
                     }
                     rows.forEach(r => {
+                        const host = r._raw.site_hostname || r._raw.hostname;
                         const id = String(r._raw.idsite ?? r._raw.id ?? '');
-                        if (id && _insCollections.site[id]) r._labelResolved = _insCollections.site[id];
+                        if (host) { r._labelResolved = host; return; }
+                        if (id && _insCollections.site[id]) { r._labelResolved = _insCollections.site[id]; return; }
+                        // Caso degenerado: 1 row sem hostname (TF agrega tudo) e só 1 site na conta
+                        if (rows.length === 1 && _insCollections.siteFallback) { r._labelResolved = _insCollections.siteFallback; return; }
+                        r._labelResolved = id ? `Site #${id}` : 'Inventário Total';
                     });
-                } catch (_) { /* mantém fallback */ }
+                } catch (_) {
+                    rows.forEach(r => {
+                        r._labelResolved = r._raw.site_hostname || r._raw.hostname || 'Inventário Total';
+                    });
+                }
                 return;
             }
             if (dim === 'zone') {
+                // 1) Tenta listar via /zones (pode não ter permissão pra advertiser)
                 try {
                     if (!_insCollections.zone) {
                         const data = await tfApi('zones?limit=1000');
+                        console.log('[TF /zones raw]', data);
                         const list = tfExtractArray(data, ['result','data']);
                         const map = {};
                         list.forEach(z => {
@@ -2198,12 +2207,35 @@
                         });
                         _insCollections.zone = map;
                     }
-                    rows.forEach(r => {
-                        r._labelResolved = _insCollections.zone[r._label] || `Zona #${r._label}`;
-                    });
                 } catch (_) {
-                    rows.forEach(r => { r._labelResolved = `Zona #${r._label}`; });
+                    _insCollections.zone = {};
                 }
+                // 2) Aplica o que conseguiu da lista
+                rows.forEach(r => {
+                    r._labelResolved = _insCollections.zone[r._label] || null;
+                });
+                // 3) Pra zonas não resolvidas, busca individualmente em paralelo (chunks de 6)
+                const unresolved = rows.filter(r => !r._labelResolved && r._label && r._label !== '0');
+                for (let i = 0; i < unresolved.length; i += 6) {
+                    const chunk = unresolved.slice(i, i + 6);
+                    const results = await Promise.allSettled(chunk.map(r => tfApi(`zones/${r._label}`)));
+                    results.forEach((res, k) => {
+                        const r = chunk[k];
+                        if (res.status === 'fulfilled') {
+                            const z = res.value?.result?.[0] || res.value?.result || res.value?.data || res.value;
+                            const obj = Array.isArray(z) ? z[0] : z;
+                            const name = obj?.name || obj?.label || obj?.zone_name;
+                            if (name) {
+                                r._labelResolved = name;
+                                _insCollections.zone[r._label] = name;
+                            }
+                        }
+                    });
+                }
+                // 4) Fallback final
+                rows.forEach(r => {
+                    if (!r._labelResolved) r._labelResolved = r._label === '0' ? 'Indefinido' : `Zona #${r._label}`;
+                });
                 return;
             }
             if (dim === 'region') {
