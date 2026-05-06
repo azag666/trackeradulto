@@ -2147,16 +2147,87 @@
         }
 
         async function resolveInsightsLabels(dim, rows) {
-            const ep = _insCollectionEndpointByDim[dim];
             if (dim === 'campaign') {
                 rows.forEach(r => { r._labelResolved = campaignsCache[r._label]?.name || ('Campanha #'+r._label); });
                 return;
             }
-            if (dim === 'date' || dim === 'hour' || dim === 'site' || dim === 'region') {
-                // Já vêm com label legível
+            if (dim === 'variation') {
+                rows.forEach(r => { r._labelResolved = 'Anúncio #' + r._label; });
+                return;
+            }
+            if (dim === 'date' || dim === 'hour') {
                 rows.forEach(r => { r._labelResolved = r._label; });
                 return;
             }
+            if (dim === 'site') {
+                // site_hostname pode vir vazio; usa hostname se tiver, senão fallback
+                rows.forEach(r => {
+                    const host = r._raw.site_hostname || r._raw.hostname;
+                    r._labelResolved = host || `Site #${r._raw.idsite ?? r._raw.id ?? '?'}`;
+                });
+                // Tenta enriquecer via /sites (chama uma vez por sessão)
+                try {
+                    if (!_insCollections.site) {
+                        const data = await tfApi('sites?limit=500');
+                        const list = tfExtractArray(data, ['result','data']);
+                        const map = {};
+                        list.forEach(s => {
+                            const id = s.id ?? s.idsite;
+                            const name = s.hostname || s.url || s.name;
+                            if (id != null && name) map[String(id)] = name;
+                        });
+                        _insCollections.site = map;
+                    }
+                    rows.forEach(r => {
+                        const id = String(r._raw.idsite ?? r._raw.id ?? '');
+                        if (id && _insCollections.site[id]) r._labelResolved = _insCollections.site[id];
+                    });
+                } catch (_) { /* mantém fallback */ }
+                return;
+            }
+            if (dim === 'zone') {
+                try {
+                    if (!_insCollections.zone) {
+                        const data = await tfApi('zones?limit=1000');
+                        const list = tfExtractArray(data, ['result','data']);
+                        const map = {};
+                        list.forEach(z => {
+                            const id = z.id ?? z.idzone;
+                            const name = z.name || z.label || z.zone_name;
+                            if (id != null && name) map[String(id)] = name;
+                        });
+                        _insCollections.zone = map;
+                    }
+                    rows.forEach(r => {
+                        r._labelResolved = _insCollections.zone[r._label] || `Zona #${r._label}`;
+                    });
+                } catch (_) {
+                    rows.forEach(r => { r._labelResolved = `Zona #${r._label}`; });
+                }
+                return;
+            }
+            if (dim === 'region') {
+                rows.forEach(r => {
+                    const country = r._raw.country ? `${r._raw.country} / ` : '';
+                    r._labelResolved = country + (r._raw.region_geoname_id ?? r._label);
+                });
+                return;
+            }
+            if (dim === 'landingPage') {
+                rows.forEach(r => {
+                    r._labelResolved = r._raw.url || r._raw.landing_page_url || r._raw.name || `LP #${r._label}`;
+                });
+                return;
+            }
+            if (dim === 'offer') {
+                rows.forEach(r => { r._labelResolved = r._raw.name || `Oferta #${r._label}`; });
+                return;
+            }
+            if (dim === 'traffic') {
+                rows.forEach(r => { r._labelResolved = r._raw.name || r._raw.label || `Tráfego #${r._label}`; });
+                return;
+            }
+            const ep = _insCollectionEndpointByDim[dim];
             if (!ep) return;
             try {
                 if (!_insCollections[dim]) {
