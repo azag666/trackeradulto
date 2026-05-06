@@ -1112,12 +1112,25 @@
             const adId = safeStr(a.ad_id, '?');
             const name = safeStr(a.ad_name, `Ad #${adId}`);
             const url = safeStr(a.target_url, '');
-            const previewUrl = safeStr(a.creative_url || a.preview_url || a.media_url, '');
+            // Campo correto na doc oficial é picture_url. Mantenho fallbacks pra outras nomenclaturas.
+            const previewUrl = safeStr(a.picture_url || a.creative_url || a.preview_url || a.media_url || a.image_url || a.thumbnail_url, '');
             const weight = safeNum(a.ad_weight);
+            const adType = safeStr(a.ad_type, '');
+            const reviewState = safeStr(a.review_state, '');
+            const spotName = safeStr(a.spot_name, '');
+            const bid = safeNum(a.bid);
             const paused = isPausedFlag(a.is_paused ?? a.paused);
-            const dotColor = paused ? 'bg-red-500' : 'bg-emerald-500';
+            const isActive = a.is_active === true || a.is_active === 1;
+            const dotColor = paused ? 'bg-red-500' : (isActive || a.is_active === undefined ? 'bg-emerald-500' : 'bg-yellow-500');
             const s = stats || {};
             const hasStats = stats && Object.keys(stats).length > 0;
+            const reviewBadge = reviewState ? (() => {
+                const rs = reviewState.toLowerCase();
+                const cls = rs === 'approved' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                          : rs === 'rejected' ? 'bg-red-500/20 text-red-300 border-red-500/30'
+                          : 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30';
+                return `<span class="absolute top-2 right-2 text-[9px] font-black uppercase px-2 py-1 rounded-full border ${cls}">${escapeHtml(reviewState)}</span>`;
+            })() : '';
             const statsHtml = hasStats ? `
                 <div class="grid grid-cols-3 gap-1.5 bg-slate-900 p-2 rounded-lg border border-slate-800">
                     <div><p class="text-[8px] text-slate-500 font-black uppercase">Imps</p><p class="text-slate-200 text-xs font-mono font-bold">${formatNumber(s.impressions)}</p></div>
@@ -1127,20 +1140,29 @@
                     <div><p class="text-[8px] text-slate-500 font-black uppercase">eCPM</p><p class="text-emerald-400 text-xs font-mono font-bold">${formatUSDPrec(s.ecpm)}</p></div>
                     <div><p class="text-[8px] text-slate-500 font-black uppercase">eCPC</p><p class="text-emerald-400 text-xs font-mono font-bold">${formatUSDPrec(s.ecpc)}</p></div>
                 </div>` : `<div class="text-[10px] text-slate-600 italic p-2">Sem métricas no período</div>`;
+            // bid + spot info (se ad-level bid existir)
+            const adMetaHtml = (bid > 0 || spotName) ? `
+                <div class="flex items-center justify-between text-[10px] bg-slate-900/60 px-2 py-1 rounded">
+                    ${spotName ? `<span class="text-slate-500"><i data-lucide="map-pin" class="w-3 h-3 inline -mt-0.5"></i> ${escapeHtml(spotName)}</span>` : '<span></span>'}
+                    ${bid > 0 ? `<span class="text-emerald-400 font-mono font-bold">$${bid.toFixed(4)}</span>` : ''}
+                </div>` : '';
             return `
                 <div class="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden flex flex-col">
-                    <div class="h-32 bg-slate-900 relative">
+                    <div class="h-40 bg-slate-900 relative group">
                         ${previewUrl
-                            ? `<img src="${escapeHtml(previewUrl)}" class="w-full h-full object-cover opacity-80" onerror="this.style.display='none'">`
-                            : `<div class="w-full h-full flex items-center justify-center text-slate-700"><i data-lucide="image" class="w-10 h-10"></i></div>`}
-                        <span class="absolute top-2 left-2 inline-flex items-center gap-1.5 bg-black/60 backdrop-blur px-2 py-1 rounded-full">
+                            ? `<a href="${escapeHtml(previewUrl)}" target="_blank" rel="noopener"><img src="${escapeHtml(previewUrl)}" class="w-full h-full object-contain bg-slate-950 opacity-90 group-hover:opacity-100 transition-opacity" loading="lazy" onerror="this.parentElement.innerHTML='<div class=&quot;w-full h-full flex flex-col items-center justify-center text-slate-700 gap-1&quot;><svg xmlns=&quot;http://www.w3.org/2000/svg&quot; width=&quot;28&quot; height=&quot;28&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;2&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot;><rect x=&quot;3&quot; y=&quot;3&quot; width=&quot;18&quot; height=&quot;18&quot; rx=&quot;2&quot;/><circle cx=&quot;9&quot; cy=&quot;9&quot; r=&quot;2&quot;/><path d=&quot;m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21&quot;/></svg><span class=&quot;text-[9px] font-bold&quot;>imagem inacessível</span></div>'"></a>`
+                            : `<div class="w-full h-full flex flex-col items-center justify-center text-slate-700 gap-1"><i data-lucide="image-off" class="w-7 h-7"></i><span class="text-[9px] font-bold">sem picture_url</span></div>`}
+                        <span class="absolute top-2 left-2 inline-flex items-center gap-1.5 bg-black/70 backdrop-blur px-2 py-1 rounded-full">
                             <span class="inline-block w-1.5 h-1.5 rounded-full ${dotColor}"></span>
                             <span class="text-[10px] font-bold uppercase">${paused ? 'pausado' : 'ativo'}</span>
                         </span>
+                        ${reviewBadge}
+                        ${adType ? `<span class="absolute bottom-2 left-2 text-[9px] font-black uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded">${escapeHtml(adType)}</span>` : ''}
                     </div>
                     <div class="p-3 space-y-2 flex-1 flex flex-col">
                         <h4 class="font-bold text-sm truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</h4>
-                        <div class="text-[10px] text-slate-500 font-mono truncate" title="${escapeHtml(url)}">${escapeHtml(url || '—')}</div>
+                        ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="text-[10px] text-slate-500 hover:text-indigo-400 font-mono truncate block" title="${escapeHtml(url)}">${escapeHtml(url)}</a>` : ''}
+                        ${adMetaHtml}
                         ${statsHtml}
                         <div class="flex items-center gap-2">
                             <label class="text-[10px] font-bold text-slate-500 uppercase">Peso</label>
