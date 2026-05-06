@@ -686,12 +686,16 @@
                     return campaignsCache;
                 } else {
                     // TF: GET /campaigns — envelope { result: [...], request_metadata: ... }
-                    const data = await tfApi('campaigns?limit=500');
+                    const data = await tfApi('campaigns?limit=500&count=true&campaign_deleted=false');
                     console.log('[TF /campaigns raw]', data);
+                    window.__lastTFCampaignsRaw = data;
                     const list = tfExtractArray(data, ['result.campaigns','result.data','result','data','campaigns']);
-                    if (!Array.isArray(list)) {
-                        console.warn('[TF /campaigns] estrutura inesperada:', data);
-                        showToast(`/campaigns retornou shape inesperado — vê console`, 'warn');
+                    if (!Array.isArray(list) || list.length === 0) {
+                        const sample = JSON.stringify(data).slice(0, 600);
+                        console.warn('[TF /campaigns] vazio ou shape inesperado. Top-level keys:', Object.keys(data || {}), 'sample:', sample);
+                        showToast(`/campaigns vazio — vê console (${Object.keys(data||{}).join(',')})`, 'warn');
+                        // Persiste pra UI mostrar amostra na tabela
+                        window.__tfCampaignsDebugSample = sample;
                         return campaignsCache;
                     }
                     campaignsCache = {};
@@ -896,6 +900,15 @@
             rows.sort((a,b) => b.cost - a.cost);
 
             if (rows.length === 0) {
+                if (activeNetwork === 'tf' && window.__tfCampaignsDebugSample) {
+                    tbody.innerHTML = `<tr><td colspan="9" class="py-8 px-6 text-left">
+                        <div class="text-yellow-400 font-bold mb-2">/campaigns retornou um shape que não consegui parsear.</div>
+                        <div class="text-[10px] text-slate-500 mb-2">Top-level keys: <code class="text-slate-300">${escapeHtml(Object.keys(window.__lastTFCampaignsRaw||{}).join(', '))}</code></div>
+                        <pre class="text-[10px] font-mono bg-slate-950 border border-slate-800 rounded p-3 max-h-48 overflow-auto whitespace-pre-wrap break-all text-slate-300">${escapeHtml(window.__tfCampaignsDebugSample)}</pre>
+                        <div class="text-[10px] text-slate-600 mt-2">Tira print disso e me manda — eu ajusto o path em ~30s.</div>
+                    </td></tr>`;
+                    return;
+                }
                 tbody.innerHTML = `<tr><td colspan="9" class="py-20 text-center text-slate-500">Nenhuma campanha.</td></tr>`;
                 return;
             }
