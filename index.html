@@ -1424,6 +1424,26 @@
             wrap.innerHTML = `<div class="col-span-full p-6 text-center text-slate-500 animate-pulse">Carregando ads e métricas...</div>`;
             const startDate = document.getElementById('filter-start').value;
             const endDate = document.getElementById('filter-end').value;
+
+            // === TF mode: variations + (opcional) stats por variation ===
+            if (activeNetwork === 'tf') {
+                try {
+                    const data = await tfApi(`campaigns/${currentCampId}/variation`);
+                    console.log('[TF /campaigns/{id}/variation modal raw]', data);
+                    const variations = tfExtractArray(data, ['variations','result.variations','result','data']);
+                    if (!variations || variations.length === 0) {
+                        wrap.innerHTML = `<div class="col-span-full p-6 text-center text-slate-500">Sem variations nessa campanha.</div>`;
+                        return;
+                    }
+                    wrap.innerHTML = variations.map(v => renderTFLibraryCard({ ...v, _kind: 'variation' })).join('');
+                    lucide.createIcons();
+                } catch (e) {
+                    wrap.innerHTML = `<div class="col-span-full p-6 text-center text-red-400">Erro: ${escapeHtml(e.message)}</div>`;
+                }
+                return;
+            }
+
+            // === TJ mode (atual) ===
             try {
                 const [adsRaw, statsRaw] = await Promise.all([
                     tjApi(`api/ads/${currentCampId}.json`),
