@@ -756,6 +756,10 @@
             }
             fetchMemberData();
             fetchCampaignsList().then(() => fetchCampaignStats());
+            // Se Insights já estiver visível, reinicializa pra trocar opções de dimensão
+            if (!document.getElementById('view-insights').classList.contains('hidden')) {
+                initInsights();
+            }
         }
 
         function updateNetworkUI() {
@@ -2064,17 +2068,34 @@
         };
 
         function initInsights() {
-            if (activeNetwork !== 'tf') {
-                document.getElementById('view-insights').innerHTML = `
-                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-500">
-                        <i data-lucide="info" class="w-10 h-10 mx-auto mb-3 text-fuchsia-400"></i>
-                        <h3 class="text-lg font-bold text-white mb-2">Insights só funciona em modo Traffic Factory</h3>
-                        <p class="text-xs">Troque pra TF no switcher do header pra ver gráficos e breakdowns.</p>
-                    </div>`;
-                lucide.createIcons();
-                return;
-            }
-            // Defaults de data: hoje
+            // Dimensões disponíveis variam por rede
+            const dimSelect = document.getElementById('insights-dim');
+            const tfOpts = `
+                <option value="date">📅 Por Dia (linha)</option>
+                <option value="hour">🕐 Por Hora</option>
+                <option value="campaign">🎯 Campanhas</option>
+                <option value="variation">🖼️ Anúncios / Variations</option>
+                <option value="landingPage">🔗 Páginas de Destino</option>
+                <option value="site">🌐 Sites</option>
+                <option value="zone">📍 Zonas</option>
+                <option value="category">🏷️ Categorias</option>
+                <option value="country">🌍 Países</option>
+                <option value="region">🗺️ Regiões</option>
+                <option value="device">📱 Dispositivos</option>
+                <option value="os">💻 Sistemas Operativos</option>
+                <option value="language">🗣️ Idiomas</option>
+                <option value="browser">🌐 Navegadores</option>
+                <option value="carrier">📡 Operadoras</option>
+                <option value="traffic">🚦 Tipo de Tráfego</option>`;
+            const tjOpts = `
+                <option value="tj-campaign">🎯 Campanhas</option>
+                <option value="tj-type">📋 Tipo de Campanha</option>
+                <option value="tj-status">⚙️ Status</option>
+                <option value="tj-spot">📍 Spots (top campanhas)</option>
+                <option value="tj-budget">💰 Uso de Budget</option>`;
+            dimSelect.innerHTML = activeNetwork === 'tf' ? tfOpts : tjOpts;
+
+            // Defaults de data: últimos 7 dias
             const today = new Date().toISOString().split('T')[0];
             const past7 = new Date(); past7.setDate(past7.getDate() - 6);
             const startEl = document.getElementById('insights-start');
@@ -2085,23 +2106,29 @@
         }
 
         async function fetchInsights() {
-            if (activeNetwork !== 'tf') return;
             const dim = document.getElementById('insights-dim').value;
             const startDate = document.getElementById('insights-start').value;
             const endDate = document.getElementById('insights-end').value;
             const tbody = document.getElementById('ins-tbody');
-            tbody.innerHTML = `<tr><td colspan="9" class="py-12 text-center"><i data-lucide="loader-2" class="animate-spin w-8 h-8 mx-auto text-fuchsia-500"></i></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="9" class="py-12 text-center"><i data-lucide="loader-2" class="animate-spin w-8 h-8 mx-auto ${activeNetwork === 'tf' ? 'text-fuchsia-500' : 'text-indigo-500'}"></i></td></tr>`;
             lucide.createIcons();
             try {
-                const data = await tfApi(`statistics/a/${dim}?date-from=${startDate}&date-to=${endDate}&limit=500&detailed=true`);
-                console.log(`[TF /statistics/a/${dim} raw]`, data);
-                const list = tfExtractArray(data, ['result','data']);
-                const total = data?.resultTotal || {};
-                _insLastRows = list.map(r => normalizeInsightsRow(r, dim));
-                _insLastDim = dim;
-                renderInsightsTotals(total, _insLastRows);
-                // Resolve nomes (lazy) pra dimensões com id
-                await resolveInsightsLabels(dim, _insLastRows);
+                if (activeNetwork === 'tf') {
+                    const data = await tfApi(`statistics/a/${dim}?date-from=${startDate}&date-to=${endDate}&limit=500&detailed=true`);
+                    console.log(`[TF /statistics/a/${dim} raw]`, data);
+                    const list = tfExtractArray(data, ['result','data']);
+                    const total = data?.resultTotal || {};
+                    _insLastRows = list.map(r => normalizeInsightsRow(r, dim));
+                    _insLastDim = dim;
+                    renderInsightsTotals(total, _insLastRows);
+                    await resolveInsightsLabels(dim, _insLastRows);
+                } else {
+                    // TJ: dimensão decide o fetch
+                    const result = await fetchInsightsTJ(dim, startDate, endDate);
+                    _insLastRows = result.rows;
+                    _insLastDim = dim;
+                    renderInsightsTotals(result.totals, _insLastRows);
+                }
                 renderInsightsChart();
                 renderInsightsTable();
             } catch (e) {
@@ -2109,6 +2136,113 @@
                 document.getElementById('ins-chart-empty').classList.remove('hidden');
                 document.getElementById('ins-chart-wrap').classList.add('hidden');
             }
+        }
+
+        async function fetchInsightsTJ(dim, startDate, endDate) {
+            // TJ: usa os endpoints existentes pra agregar
+            // dim values: tj-campaign, tj-type, tj-status, tj-spot, tj-budget
+
+            // Garante cache de campanhas + stats agregados
+            if (Object.keys(campaignsCache).length === 0) await fetchCampaignsList();
+            const stats = await tjApi(`api/campaigns/stats.json?start_date=${startDate}&end_date=${endDate}`);
+            console.log('[TJ /api/campaigns/stats raw]', stats);
+            const campRows = buildRowsFromStats(stats);
+
+            // Helper: cria objeto de stats compatível com normalizeInsightsRow
+            const mkRow = (label, raw) => ({
+                _raw: raw,
+                _label: label,
+                _labelResolved: label,
+                hits: parseInt(raw.impressions ?? raw.hits) || 0,
+                clicks: parseInt(raw.clicks) || 0,
+                cost: parseFloat(raw.cost) || 0,
+                conversions: parseInt(raw.conversions) || 0,
+                ctr: raw.impressions > 0 ? (raw.clicks / raw.impressions) * 100 : (parseFloat(raw.ctr) || 0),
+                cpm: raw.impressions > 0 ? (raw.cost / raw.impressions) * 1000 : (parseFloat(raw.ecpm) || 0),
+                avg_cpc: raw.clicks > 0 ? (raw.cost / raw.clicks) : (parseFloat(raw.ecpc) || 0)
+            });
+
+            const totalsObj = {
+                impressions: campRows.reduce((a,r) => a + r.impressions, 0),
+                clicks: campRows.reduce((a,r) => a + r.clicks, 0),
+                cost: campRows.reduce((a,r) => a + r.cost, 0),
+                conversions: campRows.reduce((a,r) => a + r.conversions, 0)
+            };
+
+            if (dim === 'tj-campaign') {
+                const rows = campRows.map(r => mkRow(r.name, r));
+                return { rows, totals: totalsObj };
+            }
+
+            if (dim === 'tj-type') {
+                const byType = {};
+                campRows.forEach(r => {
+                    const t = r.type || '—';
+                    if (!byType[t]) byType[t] = { impressions: 0, clicks: 0, cost: 0, conversions: 0, count: 0 };
+                    byType[t].impressions += r.impressions;
+                    byType[t].clicks += r.clicks;
+                    byType[t].cost += r.cost;
+                    byType[t].conversions += r.conversions;
+                    byType[t].count += 1;
+                });
+                const rows = Object.entries(byType).map(([t, agg]) => mkRow(`${t} (${agg.count} campanhas)`, agg));
+                return { rows, totals: totalsObj };
+            }
+
+            if (dim === 'tj-status') {
+                const buckets = { 'Ativa': { impressions: 0, clicks: 0, cost: 0, conversions: 0, count: 0 }, 'Pausada': { impressions: 0, clicks: 0, cost: 0, conversions: 0, count: 0 } };
+                campRows.forEach(r => {
+                    const k = isPausedFlag(r.paused) ? 'Pausada' : 'Ativa';
+                    buckets[k].impressions += r.impressions;
+                    buckets[k].clicks += r.clicks;
+                    buckets[k].cost += r.cost;
+                    buckets[k].conversions += r.conversions;
+                    buckets[k].count += 1;
+                });
+                const rows = Object.entries(buckets).map(([k, agg]) => mkRow(`${k} (${agg.count} campanhas)`, agg));
+                return { rows, totals: totalsObj };
+            }
+
+            if (dim === 'tj-budget') {
+                // Top campanhas por % de uso de budget (cost / daily_budget)
+                const rows = campRows
+                    .filter(r => r.daily_budget > 0)
+                    .map(r => {
+                        const pct = (r.cost / r.daily_budget) * 100;
+                        const raw = { ...r, _budgetPct: pct };
+                        const row = mkRow(`${r.name} (${pct.toFixed(0)}% de $${r.daily_budget.toFixed(2)})`, raw);
+                        return row;
+                    });
+                return { rows, totals: totalsObj };
+            }
+
+            if (dim === 'tj-spot') {
+                // Spots de TODAS as campanhas (chunks de 4 paralelos pra cada campanha)
+                // Usa /api/bids/{campaignId}.json + /api/spots/{campaignId}.json
+                const ids = Object.keys(campaignsCache);
+                const bySpot = {};
+                for (let i = 0; i < ids.length; i += 4) {
+                    const chunk = ids.slice(i, i + 4);
+                    const results = await Promise.allSettled(chunk.map(id => tjApi(`api/bids/${id}.json`)));
+                    results.forEach((res, k) => {
+                        if (res.status !== 'fulfilled') return;
+                        const flat = flattenBids(res.value);
+                        flat.forEach(b => {
+                            const sid = String(b.spot_id);
+                            const sname = b.spot_name || `Spot #${sid}`;
+                            if (!bySpot[sid]) bySpot[sid] = { name: sname, traffic: 0, bids_count: 0, impressions: 0, clicks: 0, cost: 0, conversions: 0 };
+                            bySpot[sid].traffic += parseInt(b.traffic) || 0;
+                            bySpot[sid].bids_count += 1;
+                        });
+                    });
+                }
+                const rows = Object.values(bySpot).map(s => mkRow(`${s.name} (${s.bids_count} bids)`, { impressions: 0, clicks: 0, cost: 0, conversions: 0, traffic: s.traffic }));
+                // Como não temos imp/click/cost por spot sem N chamadas, mostra traffic
+                rows.forEach(r => { r._raw.traffic_only = true; });
+                return { rows, totals: totalsObj };
+            }
+
+            return { rows: [], totals: totalsObj };
         }
 
         function normalizeInsightsRow(r, dim) {
@@ -2320,11 +2454,15 @@
                 rows.sort((a,b) => parseInt(a._label) - parseInt(b._label));
                 labels = rows.map(r => `${String(r._label).padStart(2,'0')}h`);
                 type = 'bar';
+            } else if (dim === 'tj-status' || dim === 'tj-type') {
+                // Pizza/bar pra distribuição
+                labels = rows.map(r => (r._labelResolved || r._label).toString().slice(0, 32));
+                type = 'doughnut';
             } else {
                 // Top 15 by metric
                 rows.sort((a,b) => (b[metric] || 0) - (a[metric] || 0));
                 rows.splice(15);
-                labels = rows.map(r => (r._labelResolved || r._label).toString().slice(0, 28));
+                labels = rows.map(r => (r._labelResolved || r._label).toString().slice(0, 32));
                 type = 'bar';
             }
             values = rows.map(r => r[metric] || 0);
@@ -2333,33 +2471,45 @@
                 cost: '#d946ef', hits: '#e2e8f0', clicks: '#22d3ee',
                 conversions: '#f97316', ctr: '#a78bfa', cpm: '#10b981', avg_cpc: '#10b981'
             };
-            const color = colors[metric] || '#d946ef';
+            const color = colors[metric] || (activeNetwork === 'tj' ? '#6366f1' : '#d946ef');
             const ctx = document.getElementById('ins-chart').getContext('2d');
             if (_insChart) _insChart.destroy();
+            // Paleta pra doughnut/pie
+            const palette = ['#6366f1', '#d946ef', '#22d3ee', '#f97316', '#10b981', '#a78bfa', '#ef4444', '#84cc16'];
+            const datasetCfg = type === 'doughnut'
+                ? {
+                    label: metric.toUpperCase(),
+                    data: values,
+                    backgroundColor: values.map((_, i) => palette[i % palette.length]),
+                    borderColor: '#0f172a',
+                    borderWidth: 2
+                }
+                : {
+                    label: metric.toUpperCase(),
+                    data: values,
+                    backgroundColor: type === 'line' ? color + '33' : color + 'cc',
+                    borderColor: color,
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: type === 'line',
+                    pointRadius: type === 'line' ? 3 : 0,
+                    pointBackgroundColor: color
+                };
             _insChart = new Chart(ctx, {
                 type,
-                data: {
-                    labels,
-                    datasets: [{
-                        label: metric.toUpperCase(),
-                        data: values,
-                        backgroundColor: type === 'line' ? color + '33' : color + 'cc',
-                        borderColor: color,
-                        borderWidth: 2,
-                        tension: 0.3,
-                        fill: type === 'line',
-                        pointRadius: type === 'line' ? 3 : 0,
-                        pointBackgroundColor: color
-                    }]
-                },
+                data: { labels, datasets: [datasetCfg] },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { labels: { color: '#94a3b8', font: { size: 11 } } },
+                        legend: {
+                            display: type === 'doughnut',
+                            position: 'right',
+                            labels: { color: '#94a3b8', font: { size: 11 } }
+                        },
                         tooltip: { backgroundColor: '#0f172a', borderColor: '#334155', borderWidth: 1 }
                     },
-                    scales: {
+                    scales: type === 'doughnut' ? {} : {
                         x: { grid: { color: '#1e293b' }, ticks: { color: '#64748b', font: { size: 10 }, maxRotation: 45 } },
                         y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b', font: { size: 10 } } }
                     }
@@ -2375,7 +2525,9 @@
                 date: 'Data', hour: 'Hora', campaign: 'Campanha', variation: 'Anúncio',
                 landingPage: 'Página', site: 'Site', zone: 'Zona', category: 'Categoria',
                 country: 'País', region: 'Região', device: 'Dispositivo', os: 'SO',
-                language: 'Idioma', browser: 'Navegador', carrier: 'Operadora', traffic: 'Tipo de Tráfego', offer: 'Oferta'
+                language: 'Idioma', browser: 'Navegador', carrier: 'Operadora', traffic: 'Tipo de Tráfego', offer: 'Oferta',
+                'tj-campaign': 'Campanha', 'tj-type': 'Tipo', 'tj-status': 'Status',
+                'tj-spot': 'Spot', 'tj-budget': 'Campanha (uso de budget)'
             };
             document.getElementById('ins-th-label').innerText = labels[_insLastDim] || 'Item';
             if (rows.length === 0) {
