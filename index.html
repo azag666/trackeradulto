@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-PT">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -21,12 +21,12 @@
                     Traffic Monitor <span class="text-gray-500 font-light text-xl">| TJ Stats</span>
                 </h1>
                 <p class="text-sm text-gray-400 mt-1">
-                    Monitoramento direto da API da TrafficJunky (Custos e Volume)
+                    Monitorização direta da API da TrafficJunky (Custos e Volume)
                 </p>
             </div>
             <div class="mt-4 md:mt-0 flex flex-col md:flex-row items-end md:items-center gap-4">
                 <span id="cors-warning" class="hidden text-xs bg-yellow-500/10 text-yellow-500 px-3 py-1 rounded-full border border-yellow-500/20 flex items-center gap-1">
-                    <i data-lucide="alert-circle" class="w-4 h-4"></i> Modo Simulado Ativo (Verifique o Console)
+                    <i data-lucide="alert-circle" class="w-4 h-4"></i> Modo Simulado Ativo (Verifique a Consola)
                 </span>
                 <button 
                     onclick="fetchTJData()"
@@ -97,7 +97,7 @@
                     <tbody id="table-body" class="divide-y divide-gray-800/50">
                         <tr>
                             <td colspan="4" class="px-6 py-12 text-center text-gray-500">
-                                Inicializando dashboard...
+                                A inicializar o dashboard...
                             </td>
                         </tr>
                     </tbody>
@@ -114,11 +114,14 @@
         // --- CONFIGURAÇÕES DA API ---
         const TJ_TOKEN = '0a5cae844058508f0f70eee015ac6d3a8adfbd670fe1c60f7ac3c3f6f1b51fe975ce183c79f2ac31168cd7fed358165736c9b24fb65cf490f8fcd77549b20691';
         
-        // Utilizando a solução de Proxy nativa do Netlify (Netlify Rewrites)
-        // Isso requer que exista um arquivo chamado '_redirects' na raiz do projeto.
-        const TJ_API_URL = '/api/tj/reports/stats';
+        // 🚨 ATENÇÃO: Se a API devolver 404 Not Found, o caminho abaixo está errado na documentação.
+        // Verifique na doc oficial da TJ e substitua este valor:
+        const ENDPOINT_CORRETO = 'api/reports/stats'; 
+        
+        // Esta URL usa o ficheiro netlify.toml como ponte para evitar bloqueios de CORS
+        const TJ_API_URL = '/tj-proxy/' + ENDPOINT_CORRETO;
 
-        // Mock para teste no navegador (quando a requisição falhar)
+        // Dados simulados para teste no navegador caso ocorra algum erro
         const mockTJResponse = [
             { spot_id: "SPOT_847291", cost: "105.50", impressions: 50000, clicks: 1200 },
             { spot_id: "SPOT_918233", cost: "65.20", impressions: 32000, clicks: 800 },
@@ -132,10 +135,10 @@
             return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
         };
         const formatNumber = (value) => {
-            return new Intl.NumberFormat('pt-BR').format(value);
+            return new Intl.NumberFormat('pt-PT').format(value);
         };
 
-        // Função principal
+        // Função principal que comunica com a API
         async function fetchTJData() {
             const btn = document.getElementById('refresh-btn');
             const icon = document.getElementById('refresh-icon');
@@ -145,11 +148,11 @@
             // Estado de carregamento
             btn.disabled = true;
             icon.classList.add('animate-spin');
-            tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">Buscando métricas da TrafficJunky via Netlify Proxy...</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">A obter métricas da TrafficJunky via Netlify...</td></tr>`;
             warning.classList.add('hidden');
 
             try {
-                // Requisição passando pelo Netlify Rewrite
+                // Pedido seguro que passa pelo nosso ficheiro netlify.toml
                 const response = await fetch(TJ_API_URL, {
                     method: 'GET',
                     headers: {
@@ -161,7 +164,7 @@
 
                 if (!response.ok) {
                     const errorText = await response.text();
-                    throw new Error(`Status: ${response.status} | Resposta: ${errorText}`);
+                    throw new Error(`Status: ${response.status} | Resposta da TJ: ${errorText}`);
                 }
 
                 const data = await response.json();
@@ -170,10 +173,10 @@
             } catch (error) {
                 console.error("================ DETALHES DO ERRO =======================");
                 console.error(error.message);
-                console.error("Se deu erro 404, significa que o arquivo '_redirects' não foi criado ou não foi enviado para o Netlify junto com o HTML.");
+                console.error("Se o erro for 404 (Route not found), significa que o ENDPOINT_CORRETO definido no script JS não existe na API da TJ.");
                 console.error("=========================================================");
                 
-                // Exibe alerta de erro e carrega mock
+                // Exibe alerta de erro e carrega os dados simulados para a interface não quebrar
                 warning.classList.remove('hidden');
                 warning.classList.add('flex');
                 renderData(mockTJResponse);
@@ -184,13 +187,13 @@
             }
         }
 
-        // Renderiza os dados na tela
+        // Renderiza os dados no ecrã
         function renderData(data) {
             const tbody = document.getElementById('table-body');
             
-            // Verifica se a resposta não veio em formato incorreto
+            // Verifica se a resposta não veio num formato incorreto
             if (!data || data.length === 0 || !Array.isArray(data)) {
-                tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">Nenhum dado encontrado ou formato inválido retornado pela API.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">Nenhum dado encontrado ou formato inválido devolvido pela API.</td></tr>`;
                 return;
             }
 
@@ -221,16 +224,16 @@
                 `;
             });
 
-            // Atualiza Tabela
+            // Atualiza a Tabela
             tbody.innerHTML = html;
 
-            // Atualiza Cards
+            // Atualiza os Cards Superiores
             document.getElementById('total-cost').innerText = formatCurrency(totalCost);
             document.getElementById('total-impressions').innerText = formatNumber(totalImp);
             document.getElementById('total-clicks').innerText = formatNumber(totalClicks);
         }
 
-        // Carrega dados iniciais assim que a tela abre
+        // Carrega dados iniciais assim que o ecrã abre
         window.onload = fetchTJData;
 
     </script>
