@@ -1,0 +1,5 @@
+[[redirects]]
+  from = "/api/tj/*"
+  to = "https://api.trafficjunky.com/api/:splat"
+  status = 200
+  force = true
