@@ -29,7 +29,7 @@
                     <i data-lucide="alert-circle" class="w-4 h-4"></i> Modo Simulado Ativo
                 </span>
                 
-                <!-- NOVO FILTRO DE DATA -->
+                <!-- FILTRO DE DATA -->
                 <select 
                     id="date-filter" 
                     onchange="fetchTJData()"
@@ -101,7 +101,7 @@
                 <table class="w-full text-left text-sm whitespace-nowrap">
                     <thead class="bg-gray-950/50 text-gray-400 uppercase tracking-wider text-xs">
                         <tr>
-                            <th class="px-6 py-4 font-medium">ID / Nome</th>
+                            <th class="px-6 py-4 font-medium">Campanha ID</th>
                             <th class="px-6 py-4 font-medium">Investimento (USD)</th>
                             <th class="px-6 py-4 font-medium text-right">Impressões</th>
                             <th class="px-6 py-4 font-medium text-right">Cliques</th>
@@ -121,17 +121,13 @@
 
     <!-- Lógica JavaScript -->
     <script>
-        // Inicializa os ícones do Lucide
         lucide.createIcons();
 
-        // Configurações
         const TJ_TOKEN = '0a5cae844058508f0f70eee015ac6d3a8adfbd670fe1c60f7ac3c3f6f1b51fe975ce183c79f2ac31168cd7fed358165736c9b24fb65cf490f8fcd77549b20691';
 
-        // Formatadores
         const formatCurrency = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
         const formatNumber = (value) => new Intl.NumberFormat('pt-BR').format(value);
 
-        // Lógica de Datas
         function getDates() {
             const filter = document.getElementById('date-filter').value;
             const end = new Date();
@@ -145,7 +141,6 @@
             } else if (filter === '30days') {
                 start.setDate(start.getDate() - 30);
             }
-            // se for 'today', as datas continuam sendo o dia de hoje
 
             const formataData = (data) => data.toISOString().split('T')[0];
             
@@ -155,24 +150,18 @@
             };
         }
 
-        // Função Principal
         async function fetchTJData() {
             const btn = document.getElementById('refresh-btn');
             const icon = document.getElementById('refresh-icon');
             const tbody = document.getElementById('table-body');
             const subtitle = document.getElementById('subtitle-dates');
             
-            // Pega as datas dinâmicas com base no select
             const { startDate, endDate } = getDates();
-            
-            // Atualiza o subtítulo para você ter certeza do que está sendo puxado
             subtitle.innerText = `Puxando métricas de ${startDate} até ${endDate}`;
 
-            // Rota final atualizada com as novas datas
             const ENDPOINT_CORRETO = `api/campaigns/stats.json?start_date=${startDate}&end_date=${endDate}`;
             const TJ_API_URL = '/tj-proxy/' + ENDPOINT_CORRETO;
 
-            // Interface em loading
             btn.disabled = true;
             icon.classList.add('animate-spin');
             tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">Buscando dados na TrafficJunky...</td></tr>`;
@@ -192,48 +181,46 @@
                 }
 
                 const data = await response.json();
-                
-                // LOG IMPORTANTE: Imprime no console o que a TJ enviou
-                console.log(`Dados crus recebidos de ${startDate} a ${endDate}:`, data);
-                
+                console.log(`Dados crus recebidos:`, data);
                 renderData(data);
 
             } catch (error) {
                 console.error("Falha ao buscar dados:", error);
-                tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-red-500">Falha ao se conectar com a API. Verifique o console.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-red-500">Falha ao se conectar.</td></tr>`;
             } finally {
                 btn.disabled = false;
                 icon.classList.remove('animate-spin');
             }
         }
 
-        // Renderiza os dados
         function renderData(data) {
             const tbody = document.getElementById('table-body');
-            
-            // Tenta mapear o objeto de resposta
-            let dadosFinais = data;
-            if (!Array.isArray(data)) {
-                const chaves = Object.keys(data);
-                for (let chave of chaves) {
-                    if (Array.isArray(data[chave])) {
-                        dadosFinais = data[chave];
-                        break;
+            let dadosFinais = [];
+
+            // A MÁGICA ACONTECE AQUI: Lendo a estrutura { "ID": { stats... } }
+            if (data && typeof data === 'object' && !Array.isArray(data)) {
+                // Pega todos os IDs de campanha (ex: "1013593201") e itera
+                Object.keys(data).forEach(idCampanha => {
+                    const stats = data[idCampanha];
+                    // Garante que é um objeto válido de stats e não algo perdido na API
+                    if (stats && typeof stats === 'object') {
+                        dadosFinais.push({
+                            campaign_id: idCampanha,
+                            ...stats
+                        });
                     }
-                }
+                });
+            } else if (Array.isArray(data)) {
+                dadosFinais = data;
             }
-            
-            if (!dadosFinais || dadosFinais.length === 0 || !Array.isArray(dadosFinais)) {
-                tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">Nenhum investimento registrado neste período (ou a campanha não gastou hoje).</td></tr>`;
-                
-                // Zera os contadores
+
+            if (dadosFinais.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">Nenhum investimento registrado neste período.</td></tr>`;
                 document.getElementById('total-cost').innerText = formatCurrency(0);
                 document.getElementById('total-impressions').innerText = formatNumber(0);
                 document.getElementById('total-clicks').innerText = formatNumber(0);
                 return;
             }
-
-            dadosFinais.sort((a, b) => parseFloat(b.cost || 0) - parseFloat(a.cost || 0));
 
             let totalCost = 0;
             let totalImp = 0;
@@ -241,7 +228,8 @@
             let html = '';
 
             dadosFinais.forEach(row => {
-                const cost = parseFloat(row.cost || row.spent || 0);
+                // A API pode enviar o custo em nomes diferentes, tentamos vários:
+                const cost = parseFloat(row.cost || row.spent || row.amount || row.total_cost || 0);
                 const imp = parseInt(row.impressions || row.views || 0);
                 const clicks = parseInt(row.clicks || 0);
 
@@ -249,11 +237,13 @@
                 totalImp += imp;
                 totalClicks += clicks;
 
-                const idLabel = row.campaign_id || row.spot_id || row.name || 'Campanha Desconhecida';
-
                 html += `
                     <tr class="transition-colors hover:bg-gray-800/50">
-                        <td class="px-6 py-4 font-mono text-gray-300">${idLabel}</td>
+                        <td class="px-6 py-4 font-mono text-gray-300 font-bold">
+                            <span class="bg-indigo-900/40 text-indigo-300 px-2 py-1 rounded border border-indigo-500/20">
+                                ID: ${row.campaign_id}
+                            </span>
+                        </td>
                         <td class="px-6 py-4 text-emerald-400 font-medium">${formatCurrency(cost)}</td>
                         <td class="px-6 py-4 text-right text-gray-300">${formatNumber(imp)}</td>
                         <td class="px-6 py-4 text-right text-gray-300">${formatNumber(clicks)}</td>
@@ -261,13 +251,15 @@
                 `;
             });
 
+            // Se quisermos ordenar por gasto/investimento
+            // html.sort((a, b) => ...) // Opcional, mantive a ordem que vem da API
+
             tbody.innerHTML = html;
             document.getElementById('total-cost').innerText = formatCurrency(totalCost);
             document.getElementById('total-impressions').innerText = formatNumber(totalImp);
             document.getElementById('total-clicks').innerText = formatNumber(totalClicks);
         }
 
-        // Inicia puxando os dados de Hoje automaticamente
         window.onload = fetchTJData;
 
     </script>
