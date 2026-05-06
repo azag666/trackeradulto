@@ -3,526 +3,367 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Traffic Monitor | Command Center</title>
-    <!-- Tailwind CSS -->
+    <title>TJ Command Center | PRO</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         ::-webkit-scrollbar { height: 8px; width: 8px; }
-        ::-webkit-scrollbar-track { background: #111827; }
-        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #4B5563; }
-        .toast-enter { animation: slideIn 0.3s ease-out forwards; }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        .tab-active { border-bottom: 3px solid #6366f1; color: #fff; background: rgba(99, 102, 241, 0.1); }
+        .tab-inactive { color: #64748b; }
+        .tab-inactive:hover { color: #cbd5e1; background: rgba(255,255,255,0.05); }
     </style>
 </head>
-<body class="bg-gray-950 text-gray-100 p-6 font-sans selection:bg-indigo-500/30 min-h-screen">
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen">
 
-    <!-- Container de Notificações (Toasts) -->
+    <!-- Notificações -->
     <div id="toast-container" class="fixed top-6 right-6 z-[100] flex flex-col gap-3"></div>
 
-    <div class="max-w-[1600px] mx-auto space-y-6">
-        
-        <!-- Cabeçalho -->
-        <header class="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-gray-800">
-            <div>
-                <h1 class="text-3xl font-bold flex items-center gap-2 text-white">
-                    <i data-lucide="crosshair" class="text-indigo-500 w-8 h-8"></i>
-                    Traffic Monitor <span class="text-gray-500 font-light text-2xl">| Command Center</span>
-                </h1>
-                <p class="text-sm text-gray-400 mt-1" id="subtitle-dates">
-                    Gestão Ativa: Controle total de Bids, Ads e Campanhas
-                </p>
+    <!-- Nav Master -->
+    <nav class="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-40">
+        <div class="max-w-[1700px] mx-auto px-6 flex items-center justify-between h-16">
+            <div class="flex items-center gap-3">
+                <div class="bg-indigo-600 p-1.5 rounded-lg"><i data-lucide="shield-check" class="text-white w-5 h-5"></i></div>
+                <span class="text-xl font-black tracking-tighter">TJ COMMANDER <span class="text-indigo-500 italic">PRO</span></span>
             </div>
-            <div class="mt-4 md:mt-0 flex flex-col md:flex-row items-end md:items-center gap-4">
-                <select id="date-filter" onchange="fetchTJData()" class="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none font-medium shadow-lg">
-                    <option value="today" selected>Hoje</option>
-                    <option value="yesterday">Ontem</option>
-                    <option value="7days">Últimos 7 Dias</option>
-                    <option value="30days">Últimos 30 Dias</option>
-                </select>
-                <button onclick="fetchTJData()" id="refresh-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 shadow-lg shadow-indigo-900/20">
-                    <i data-lucide="refresh-cw" id="refresh-icon" class="w-4 h-4"></i> Sincronizar
+            
+            <div class="flex h-full gap-2">
+                <button onclick="switchTab('dash')" id="tab-dash" class="tab-active px-6 transition-all text-sm font-bold flex items-center gap-2">
+                    <i data-lucide="layout-dashboard" class="w-4 h-4"></i> DASHBOARD
+                </button>
+                <button onclick="switchTab('creatives')" id="tab-creatives" class="tab-inactive px-6 transition-all text-sm font-bold flex items-center gap-2">
+                    <i data-lucide="image-plus" class="w-4 h-4"></i> CRIATIVOS
                 </button>
             </div>
-        </header>
 
-        <!-- Cards (Mantidos compactos para dar espaço à gestão) -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-            <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-lg">
-                <p class="text-gray-400 text-sm font-medium mb-1">Gasto Total (USD)</p>
-                <div class="flex justify-between items-end">
-                    <h3 id="total-cost" class="text-2xl font-bold text-emerald-400">$ 0,00</h3>
+            <!-- Saldo em Tempo Real -->
+            <div class="flex items-center gap-4 bg-slate-950 px-4 py-1.5 rounded-full border border-slate-800">
+                <div class="flex flex-col items-end leading-tight">
+                    <span class="text-[10px] text-slate-500 font-bold uppercase">Saldo Atual</span>
+                    <span id="header-balance" class="text-sm font-mono text-emerald-400 font-bold">$ 0.00</span>
+                </div>
+                <button onclick="fetchMemberData()" class="hover:rotate-180 transition-transform duration-500">
+                    <i data-lucide="rotate-cw" class="w-4 h-4 text-slate-600"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-[1700px] mx-auto p-6 space-y-6">
+
+        <!-- ABA 1: OPERAÇÕES DE TRÁFEGO -->
+        <div id="view-dash" class="space-y-6 animate-in fade-in duration-500">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="bg-slate-900 p-5 rounded-2xl border border-slate-800">
+                    <p class="text-slate-500 text-xs font-bold uppercase mb-1">Gasto Total (USD)</p>
+                    <h3 id="stat-cost" class="text-2xl font-black text-indigo-400">$ 0.00</h3>
+                </div>
+                <div class="bg-slate-900 p-5 rounded-2xl border border-slate-800">
+                    <p class="text-slate-500 text-xs font-bold uppercase mb-1">Impressões</p>
+                    <h3 id="stat-imp" class="text-2xl font-black text-white">0</h3>
+                </div>
+                <div class="bg-slate-900 p-5 rounded-2xl border border-slate-800">
+                    <p class="text-slate-500 text-xs font-bold uppercase mb-1">Conversões</p>
+                    <h3 id="stat-conv" class="text-2xl font-black text-orange-500">0</h3>
+                </div>
+                <div class="bg-slate-900 p-5 rounded-2xl border border-slate-800">
+                    <p class="text-slate-500 text-xs font-bold uppercase mb-1">Budget Restante</p>
+                    <h3 id="stat-budget-left" class="text-2xl font-black text-emerald-500">$ 0.00</h3>
                 </div>
             </div>
-            <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-lg">
-                <p class="text-gray-400 text-sm font-medium mb-1">Total Impressões</p>
-                <div class="flex justify-between items-end">
-                    <h3 id="total-impressions" class="text-2xl font-bold text-white">0</h3>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+                <div class="p-5 border-b border-slate-800 bg-slate-900/50 flex justify-between items-center">
+                    <h2 class="font-bold flex items-center gap-2 text-slate-300"><i data-lucide="list-video" class="text-indigo-500"></i> Campanhas Ativas</h2>
+                    <div class="flex gap-2">
+                         <button onclick="fetchCampaignStats()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all">
+                            <i data-lucide="refresh-ccw" class="w-3.5 h-3.5"></i> SINCRONIZAR API
+                        </button>
+                    </div>
                 </div>
-            </div>
-            <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-lg border-b-2 border-b-purple-500">
-                <p class="text-gray-400 text-sm font-medium mb-1">Video Plays (CTV)</p>
-                <div class="flex justify-between items-end">
-                    <h3 id="total-plays" class="text-2xl font-bold text-purple-400">0</h3>
-                </div>
-            </div>
-            <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-lg border-b-2 border-b-orange-500">
-                <p class="text-gray-400 text-sm font-medium mb-1">Conversões (TJ)</p>
-                <div class="flex justify-between items-end">
-                    <h3 id="total-conversions" class="text-2xl font-bold text-orange-400">0</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm whitespace-nowrap">
+                        <thead class="bg-slate-950 text-slate-500 uppercase text-[10px] font-black tracking-widest border-b border-slate-800">
+                            <tr>
+                                <th class="px-6 py-4">Status / Campanha</th>
+                                <th class="px-6 py-4">Investimento</th>
+                                <th class="px-6 py-4">Performance (CTR)</th>
+                                <th class="px-6 py-4 text-center">Gestão Direta</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dash-tbody" class="divide-y divide-slate-800/50">
+                            <tr><td colspan="4" class="py-20 text-center text-slate-600 font-medium">Conecte sua API para iniciar...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
 
-        <!-- Tabela Principal -->
-        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden shadow-2xl">
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-sm whitespace-nowrap">
-                    <thead class="bg-gray-950/80 text-gray-400 uppercase tracking-wider text-xs border-b border-gray-800">
-                        <tr>
-                            <th class="px-6 py-4 font-medium">Campanha</th>
-                            <th class="px-6 py-4 font-medium">Gasto (USD)</th>
-                            <th class="px-6 py-4 font-medium text-right">Volume</th>
-                            <th class="px-6 py-4 font-medium text-right">Custos (eCPM)</th>
-                            <th class="px-6 py-4 font-medium text-center">Performance</th>
-                            <th class="px-6 py-4 font-medium text-center text-indigo-400">Gerenciamento</th>
-                        </tr>
-                    </thead>
-                    <tbody id="table-body" class="divide-y divide-gray-800/50">
-                        <tr><td colspan="6" class="px-6 py-12 text-center text-gray-500">Sincronizando...</td></tr>
-                    </tbody>
-                </table>
+        <!-- ABA 2: BIBLIOTECA DE CRIATIVOS (V2) -->
+        <div id="view-creatives" class="hidden space-y-6">
+            <header class="flex justify-between items-center">
+                <h2 class="text-2xl font-bold">Creative Library <span class="text-slate-500 font-mono text-sm">/ API V2</span></h2>
+                <button onclick="openUploadModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-emerald-900/20">
+                    <i data-lucide="upload-cloud"></i> NOVO UPLOAD
+                </button>
+            </header>
+            <div id="creatives-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <!-- Preenchido via JS -->
             </div>
         </div>
-    </div>
 
-    <!-- MODAL DE GESTÃO DA CAMPANHA -->
-    <div id="manage-modal" class="fixed inset-0 bg-black/80 z-50 hidden flex justify-center items-start pt-10 pb-10 overflow-y-auto">
-        <div class="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-5xl shadow-2xl mx-4 flex flex-col">
+    </main>
+
+    <!-- MODAL DE GESTÃO PRO (BIDS + BUDGET + STATUS) -->
+    <div id="manage-modal" class="fixed inset-0 bg-slate-950/90 z-50 hidden flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-slate-900 border border-slate-700 w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="p-6 border-b border-slate-800 bg-slate-900/80 flex justify-between items-center">
+                <div>
+                    <h2 id="modal-title" class="text-xl font-black text-white">---</h2>
+                    <span id="modal-id" class="text-xs font-mono text-slate-500">ID: ---</span>
+                </div>
+                <button onclick="closeModal('manage-modal')" class="text-slate-400 hover:text-white transition-colors"><i data-lucide="x-circle" class="w-8 h-8"></i></button>
+            </div>
             
-            <!-- Modal Header -->
-            <div class="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950/50 rounded-t-xl">
-                <div>
-                    <h2 id="modal-title" class="text-2xl font-bold text-white flex items-center gap-2">
-                        <i data-lucide="settings"></i> Gerenciar Campanha
-                    </h2>
-                    <p id="modal-subtitle" class="text-gray-400 text-sm mt-1 font-mono">ID: ---</p>
-                </div>
-                <div class="flex items-center gap-4">
-                    <button id="btn-pause-campaign" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-gray-700 flex items-center gap-2">
-                        Aguarde...
-                    </button>
-                    <button onclick="closeModal()" class="text-gray-500 hover:text-white transition-colors">
-                        <i data-lucide="x" class="w-6 h-6"></i>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Modal Body (Carregando) -->
-            <div id="modal-loading" class="p-16 flex flex-col items-center justify-center text-gray-400">
-                <i data-lucide="loader-2" class="animate-spin w-10 h-10 mb-4 text-indigo-500"></i>
-                <p>Buscando Bids e Ads diretamente da TrafficJunky...</p>
-            </div>
-
-            <!-- Modal Body (Conteúdo) -->
-            <div id="modal-content" class="p-6 space-y-8 hidden">
-                
-                <!-- Secção de BIDS -->
-                <div>
-                    <h3 class="text-lg font-semibold text-gray-200 mb-3 flex items-center gap-2">
-                        <i data-lucide="dollar-sign" class="text-emerald-400"></i> Gestão de Bids (Lances)
-                    </h3>
-                    <div class="bg-gray-950 rounded-lg border border-gray-800 overflow-hidden">
-                        <table class="w-full text-left text-sm whitespace-nowrap">
-                            <thead class="bg-gray-900 text-gray-400 text-xs uppercase border-b border-gray-800">
-                                <tr>
-                                    <th class="px-4 py-3">Bid ID</th>
-                                    <th class="px-4 py-3">Tipo / Spot ID</th>
-                                    <th class="px-4 py-3">Lance Atual</th>
-                                    <th class="px-4 py-3">Ação</th>
-                                </tr>
-                            </thead>
-                            <tbody id="bids-body" class="divide-y divide-gray-800">
-                                <!-- Bids preenchidos via JS -->
-                            </tbody>
-                        </table>
+            <div class="p-6 overflow-y-auto space-y-8">
+                <!-- Controle de Budget e Status da Campanha -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                        <label class="text-[10px] font-black text-slate-500 uppercase mb-2 block">Status da Campanha</label>
+                        <div id="modal-status-toggle" class="flex gap-2">
+                            <!-- Botões de Play/Pause injetados -->
+                        </div>
+                    </div>
+                    <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                        <label class="text-[10px] font-black text-slate-500 uppercase mb-2 block">Daily Budget (USD)</label>
+                        <div class="flex gap-2">
+                            <input type="number" id="input-budget" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 w-full text-white font-mono outline-none focus:border-indigo-500">
+                            <button onclick="updateCampaignBudget()" class="bg-indigo-600 text-white px-4 rounded-lg font-bold text-xs">SALVAR</button>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Secção de ADS -->
-                <div>
-                    <h3 class="text-lg font-semibold text-gray-200 mb-3 flex items-center gap-2">
-                        <i data-lucide="image" class="text-purple-400"></i> Gestão de Ads (Criativos)
-                    </h3>
-                    <div class="bg-gray-950 rounded-lg border border-gray-800 overflow-hidden">
-                        <table class="w-full text-left text-sm whitespace-nowrap">
-                            <thead class="bg-gray-900 text-gray-400 text-xs uppercase border-b border-gray-800">
-                                <tr>
-                                    <th class="px-4 py-3">Ad ID</th>
-                                    <th class="px-4 py-3">Nome / Target URL</th>
-                                    <th class="px-4 py-3 text-center">Status</th>
-                                    <th class="px-4 py-3 text-right">Ação</th>
-                                </tr>
+                <!-- Gestão de Bids -->
+                <div class="space-y-4">
+                    <h3 class="text-sm font-bold flex items-center gap-2"><i data-lucide="trending-up" class="text-emerald-400"></i> Lances por Spot (Bids)</h3>
+                    <div class="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-900 text-slate-500 uppercase font-bold border-b border-slate-800">
+                                <tr><th class="px-4 py-3">ID / Spot</th><th class="px-4 py-3">Lance</th><th class="px-4 py-3">Ação</th></tr>
                             </thead>
-                            <tbody id="ads-body" class="divide-y divide-gray-800">
-                                <!-- Ads preenchidos via JS -->
-                            </tbody>
+                            <tbody id="modal-bids-body" class="divide-y divide-slate-800"></tbody>
                         </table>
                     </div>
                 </div>
-
             </div>
         </div>
     </div>
 
-    <!-- Lógica JavaScript -->
     <script>
         lucide.createIcons();
 
+        // CONFIGS
         const TJ_TOKEN = '0a5cae844058508f0f70eee015ac6d3a8adfbd670fe1c60f7ac3c3f6f1b51fe975ce183c79f2ac31168cd7fed358165736c9b24fb65cf490f8fcd77549b20691';
+        let currentCampId = null;
 
-        // Formatadores
-        const formatCurrency = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
-        const formatMicro = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 3, maximumFractionDigits: 4 }).format(value);
-        const formatNumber = (value) => new Intl.NumberFormat('pt-BR').format(value);
+        // AUXILIARES
+        const formatUSD = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v);
+        const formatMUSD = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 3 }).format(v);
 
-        // --- SISTEMA DE TOAST (Notificações) ---
-        function showToast(message, type = 'success') {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            const isSuccess = type === 'success';
+        // NAVEGAÇÃO
+        function switchTab(tab) {
+            document.getElementById('view-dash').classList.add('hidden');
+            document.getElementById('view-creatives').classList.add('hidden');
+            document.getElementById('tab-dash').className = 'tab-inactive px-6 transition-all text-sm font-bold flex items-center gap-2';
+            document.getElementById('tab-creatives').className = 'tab-inactive px-6 transition-all text-sm font-bold flex items-center gap-2';
             
-            toast.className = `toast-enter flex items-center gap-3 px-4 py-3 rounded-lg shadow-xl border ${isSuccess ? 'bg-emerald-900/90 border-emerald-500/50 text-emerald-100' : 'bg-red-900/90 border-red-500/50 text-red-100'}`;
-            toast.innerHTML = `
-                <i data-lucide="${isSuccess ? 'check-circle' : 'alert-octagon'}" class="w-5 h-5 ${isSuccess ? 'text-emerald-400' : 'text-red-400'}"></i>
-                <span class="font-medium text-sm">${message}</span>
-            `;
-            container.appendChild(toast);
-            lucide.createIcons();
+            document.getElementById(`view-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-${tab}`).className = 'tab-active px-6 transition-all text-sm font-bold flex items-center gap-2';
             
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                toast.style.transform = 'translateX(100%)';
-                toast.style.transition = 'all 0.3s ease-in-out';
-                setTimeout(() => toast.remove(), 300);
-            }, 4000);
+            if(tab === 'creatives') fetchCreatives();
         }
 
-        // --- CORE: Chamadas de API Genéricas ---
-        async function tjCall(endpoint, method = 'GET') {
-            const url = `/tj-proxy/${endpoint}`;
-            const response = await fetch(url, {
-                method: method,
-                headers: { 'Authorization': `Bearer ${TJ_TOKEN}`, 'Accept': 'application/json' }
-            });
-            if (!response.ok) {
-                const text = await response.text();
-                throw new Error(text || `HTTP Error ${response.status}`);
-            }
-            // Algumas requisições PUT da TJ retornam vazio, então tratamos o JSON apenas se houver
-            const text = await response.text();
+        function showToast(msg, type = 'success') {
+            const c = document.getElementById('toast-container');
+            const t = document.createElement('div');
+            t.className = `flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl border animate-in slide-in-from-right duration-300 ${type === 'success' ? 'bg-emerald-950 border-emerald-500/30 text-emerald-100' : 'bg-red-950 border-red-500/30 text-red-100'}`;
+            t.innerHTML = `<i data-lucide="${type === 'success' ? 'check-circle' : 'alert-triangle'}" class="w-5 h-5"></i><span class="text-sm font-bold">${msg}</span>`;
+            c.appendChild(t); lucide.createIcons();
+            setTimeout(() => t.remove(), 4000);
+        }
+
+        // CHAMADA API CENTRALIZADA (NETLIFY PROXY)
+        async function tjApi(endpoint, method = 'GET', body = null) {
+            const options = { method, headers: { 'Authorization': `Bearer ${TJ_TOKEN}`, 'Accept': 'application/json' } };
+            if (body) options.body = body instanceof FormData ? body : JSON.stringify(body);
+            if (body && !(body instanceof FormData)) options.headers['Content-Type'] = 'application/json';
+            
+            const res = await fetch(`/tj-proxy/${endpoint}`, options);
+            if (!res.ok) throw new Error(await res.text());
+            const text = await res.text();
             return text ? JSON.parse(text) : { success: true };
         }
 
-        // --- DASHBOARD PRINCIPAL (STATS) ---
-        function getDates() {
-            const filter = document.getElementById('date-filter').value;
-            const end = new Date(), start = new Date();
-            if (filter === 'yesterday') { start.setDate(start.getDate() - 1); end.setDate(end.getDate() - 1); } 
-            else if (filter === '7days') { start.setDate(start.getDate() - 7); } 
-            else if (filter === '30days') { start.setDate(start.getDate() - 30); }
-            const f = (d) => d.toISOString().split('T')[0];
-            return { startDate: f(start), endDate: f(end) };
+        // DASHBOARD & MEMBER (V1)
+        async function fetchMemberData() {
+            try {
+                const data = await tjApi('api/member.json');
+                document.getElementById('header-balance').innerText = formatUSD(data.current_balance);
+                document.getElementById('stat-budget-left').innerText = formatUSD(data.daily_budget_left || 0);
+            } catch (e) { showToast("Erro ao carregar saldo", "error"); }
         }
 
-        async function fetchTJData() {
-            const btn = document.getElementById('refresh-btn');
-            const tbody = document.getElementById('table-body');
-            const { startDate, endDate } = getDates();
-            
-            btn.disabled = true;
-            document.getElementById('refresh-icon').classList.add('animate-spin');
-            tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-gray-500"><i data-lucide="loader-2" class="animate-spin w-6 h-6 mx-auto mb-2"></i>A buscar dados...</td></tr>`;
+        async function fetchCampaignStats() {
+            const tbody = document.getElementById('dash-tbody');
+            tbody.innerHTML = `<tr><td colspan="4" class="py-20 text-center"><i data-lucide="loader-2" class="animate-spin w-8 h-8 mx-auto text-indigo-500"></i></td></tr>`;
             lucide.createIcons();
 
             try {
-                const data = await tjCall(`api/campaigns/stats.json?start_date=${startDate}&end_date=${endDate}`);
-                renderData(data);
-            } catch (error) {
-                showToast("Erro ao sincronizar dados do Dashboard.", "error");
-                tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-red-500">Falha de conexão. Verifique a chave ou o proxy.</td></tr>`;
-            } finally {
-                btn.disabled = false;
-                document.getElementById('refresh-icon').classList.remove('animate-spin');
-            }
-        }
-
-        function renderData(data) {
-            const tbody = document.getElementById('table-body');
-            let dadosFinais = [];
-
-            if (data && typeof data === 'object' && !Array.isArray(data)) {
-                Object.keys(data).forEach(id => {
-                    if (data[id] && typeof data[id] === 'object') dadosFinais.push({ campaign_id_key: id, ...data[id] });
-                });
-            } else if (Array.isArray(data)) { dadosFinais = data; }
-
-            if (dadosFinais.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-gray-500">Sem tráfego neste período.</td></tr>`;
-                return;
-            }
-
-            dadosFinais.sort((a, b) => parseFloat(b.cost || 0) - parseFloat(a.cost || 0));
-            let tCost = 0, tImp = 0, tPlays = 0, tConv = 0, html = '';
-
-            dadosFinais.forEach(row => {
-                const cost = parseFloat(row.cost || 0);
-                const imp = parseInt(row.impressions || 0);
-                const plays = parseInt(row.plays || 0);
-                const conv = parseInt(row.conversions || 0);
+                // Puxamos stats dinâmicos de hoje
+                const date = new Date().toISOString().split('T')[0];
+                const stats = await tjApi(`api/campaigns/stats.json?start_date=${date}&end_date=${date}`);
                 
-                const name = row.campaign_name || "Campanha";
-                const id = row.campaign_id || row.campaign_id_key;
-                const ctr = parseFloat(row.ctr || 0).toFixed(3);
-                const ecpm = parseFloat(row.ecpm || 0);
+                let rows = [];
+                Object.keys(stats).forEach(id => { if(typeof stats[id] === 'object') rows.push({ id, ...stats[id] }); });
 
-                tCost += cost; tImp += imp; tPlays += plays; tConv += conv;
-
-                // Escapando aspas para passar nos botões
-                const safeName = name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-
-                html += `
-                    <tr class="transition-colors hover:bg-gray-800/40">
-                        <td class="px-6 py-4">
-                            <span class="font-bold text-gray-200">${name}</span>
-                            <div class="mt-1"><span class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded font-mono">ID: ${id}</span></div>
-                        </td>
-                        <td class="px-6 py-4"><span class="text-emerald-400 font-bold">${formatCurrency(cost)}</span></td>
-                        <td class="px-6 py-4 text-right">
-                            <span class="text-gray-300 flex items-center justify-end gap-1">${formatNumber(imp)} <i data-lucide="eye" class="w-3 h-3"></i></span>
-                        </td>
-                        <td class="px-6 py-4 text-right font-mono text-gray-400">${formatMicro(ecpm)}</td>
-                        <td class="px-6 py-4 text-center">
-                            <span class="inline-flex items-center gap-1 ${ctr > 0.1 ? 'text-indigo-400' : 'text-gray-400'}"><i data-lucide="percent" class="w-3 h-3"></i> ${ctr}</span>
-                        </td>
-                        <td class="px-6 py-4 text-center">
-                            <button onclick="openManageModal('${id}', '${safeName}')" class="bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 px-4 py-1.5 rounded text-xs font-bold transition-all flex items-center justify-center gap-2 w-full mx-auto">
-                                <i data-lucide="sliders" class="w-4 h-4"></i> Gerenciar
-                            </button>
-                        </td>
-                    </tr>
-                `;
-            });
-
-            tbody.innerHTML = html;
-            lucide.createIcons();
-            document.getElementById('total-cost').innerText = formatCurrency(tCost);
-            document.getElementById('total-impressions').innerText = formatNumber(tImp);
-            document.getElementById('total-plays').innerText = formatNumber(tPlays);
-            document.getElementById('total-conversions').innerText = formatNumber(tConv);
-        }
-
-        // --- FUNÇÕES DE GESTÃO (MODAL E APIS) ---
-        let currentCampaignId = null;
-
-        async function openManageModal(campId, campName) {
-            currentCampaignId = campId;
-            document.getElementById('manage-modal').classList.remove('hidden');
-            document.getElementById('modal-title').innerHTML = `<i data-lucide="settings" class="w-6 h-6"></i> ${campName}`;
-            document.getElementById('modal-subtitle').innerText = `ID da Campanha: ${campId}`;
-            
-            document.getElementById('modal-loading').classList.remove('hidden');
-            document.getElementById('modal-content').classList.add('hidden');
-            lucide.createIcons();
-
-            try {
-                // Dispara os dois requests em paralelo para ser rápido
-                const [bidsData, adsData] = await Promise.all([
-                    tjCall(`api/bids/${campId}.json`), // Busca lances
-                    tjCall(`api/ads/${campId}.json`)   // Busca Ads
-                ]);
-                
-                renderBids(bidsData);
-                renderAds(adsData);
-
-                // Como a API não nos dá a rota de status da campanha diretamente no endpoint de stats, 
-                // deixamos o botão de pausa genérico configurado para essa campanha
-                setupCampaignPauseButton(campId);
-
-                document.getElementById('modal-loading').classList.add('hidden');
-                document.getElementById('modal-content').classList.remove('hidden');
-                lucide.createIcons();
-            } catch (error) {
-                console.error(error);
-                showToast("Erro ao carregar configurações da campanha.", "error");
-                closeModal();
-            }
-        }
-
-        function closeModal() {
-            document.getElementById('manage-modal').classList.add('hidden');
-            currentCampaignId = null;
-        }
-
-        function renderBids(bidsArray) {
-            const tbody = document.getElementById('bids-body');
-            if (!bidsArray || !Array.isArray(bidsArray) || bidsArray.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">Nenhum Bid encontrado.</td></tr>`;
-                return;
-            }
-
-            let html = '';
-            bidsArray.forEach(bidObj => {
-                // Normalmente a TJ envia em array, checar console se precisar ajustar prop
-                const b = bidObj.Bid || bidObj; 
-                if(!b.id) return;
-
-                html += `
-                    <tr class="hover:bg-gray-800/30">
-                        <td class="px-4 py-3 font-mono text-gray-400 text-xs">${b.id}</td>
-                        <td class="px-4 py-3 text-gray-300 text-xs truncate max-w-[200px]" title="${b.spot_id || 'Global'}">Spot: ${b.spot_id || 'Campanha Global'}</td>
-                        <td class="px-4 py-3">
-                            <input type="number" step="0.001" id="input-bid-${b.id}" value="${b.bid || 0}" class="bg-gray-900 border border-gray-700 text-white text-xs rounded p-1.5 w-24 outline-none focus:border-emerald-500 text-right">
-                        </td>
-                        <td class="px-4 py-3">
-                            <button onclick="updateBid('${b.id}')" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded text-xs font-bold transition-colors shadow flex items-center gap-1">
-                                <i data-lucide="check" class="w-3 h-3"></i> Salvar
-                            </button>
-                        </td>
-                    </tr>
-                `;
-            });
-            tbody.innerHTML = html;
-        }
-
-        function renderAds(adsArray) {
-            const tbody = document.getElementById('ads-body');
-            if (!adsArray || !Array.isArray(adsArray) || adsArray.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">Nenhum Ad encontrado.</td></tr>`;
-                return;
-            }
-
-            let html = '';
-            adsArray.forEach(adItem => {
-                const ad = adItem.Ad || adItem;
-                if(!ad.ad_id) return;
-                
-                // Converte string para bool/número confiável
-                const isPaused = ad.is_paused == 1 || ad.is_paused === true || ad.is_paused === '1';
-
-                html += `
-                    <tr class="hover:bg-gray-800/30">
-                        <td class="px-4 py-3 font-mono text-gray-400 text-xs">${ad.ad_id}</td>
-                        <td class="px-4 py-3">
-                            <div class="text-gray-200 text-xs font-bold truncate max-w-[250px]">${ad.ad_name || 'Anúncio sem nome'}</div>
-                            <div class="text-gray-500 text-[10px] truncate max-w-[250px] mt-0.5">${ad.target_url || ''}</div>
-                        </td>
-                        <td class="px-4 py-3 text-center" id="status-ad-${ad.ad_id}">
-                            ${isPaused ? '<span class="bg-red-500/20 text-red-400 px-2 py-0.5 rounded text-[10px] uppercase font-bold">Pausado</span>' : '<span class="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded text-[10px] uppercase font-bold">Ativo</span>'}
-                        </td>
-                        <td class="px-4 py-3 text-right">
-                            <button onclick="toggleAd('${ad.ad_id}', ${isPaused})" class="${isPaused ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'} text-white px-3 py-1.5 rounded text-xs font-bold transition-colors shadow inline-flex items-center gap-1 min-w-[80px] justify-center">
-                                <i data-lucide="${isPaused ? 'play' : 'pause'}" class="w-3 h-3"></i> ${isPaused ? 'Ativar' : 'Pausar'}
-                            </button>
-                        </td>
-                    </tr>
-                `;
-            });
-            tbody.innerHTML = html;
-        }
-
-        // --- AÇÕES DIRETAS (PUT / PATCH) ---
-
-        // Atualizar Bid
-        async function updateBid(bidId) {
-            const input = document.getElementById(`input-bid-${bidId}`);
-            const novoValor = parseFloat(input.value);
-            if(isNaN(novoValor) || novoValor <= 0) {
-                showToast("Valor do lance inválido.", "error"); return;
-            }
-            
-            const btn = event.currentTarget;
-            const originalHTML = btn.innerHTML;
-            btn.innerHTML = `<i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i>`;
-            btn.disabled = true;
-            lucide.createIcons();
-
-            try {
-                // endpoint: PUT /api/bids/{bidId}/set.{format}?bid={value}
-                await tjCall(`api/bids/${bidId}/set.json?bid=${novoValor}`, 'PUT');
-                showToast(`Bid atualizado para $${novoValor}!`, 'success');
-            } catch (error) {
-                console.error(error);
-                showToast("Erro ao alterar o lance.", "error");
-            } finally {
-                btn.innerHTML = originalHTML;
-                btn.disabled = false;
-                lucide.createIcons();
-            }
-        }
-
-        // Alternar Estado do Ad (Ativar / Pausar)
-        async function toggleAd(adId, currentlyPaused) {
-            // endpoint: PUT /api/ads/{adId}/pauses/{active}.json
-            // Se está pausado, queremos ativar (active = 1). Se não, pausar (active = 0).
-            const activeParam = currentlyPaused ? 1 : 0;
-            
-            const btn = event.currentTarget;
-            const originalHTML = btn.innerHTML;
-            btn.innerHTML = `<i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i>`;
-            btn.disabled = true;
-            lucide.createIcons();
-
-            try {
-                await tjCall(`api/ads/${adId}/pauses/${activeParam}.json`, 'PUT');
-                showToast(`Anúncio ${activeParam ? 'ativado' : 'pausado'} com sucesso!`);
-                // Como não queremos recarregar tudo, apenas recarregamos a aba de Ads para refletir a nova UI
-                const adsData = await tjCall(`api/ads/${currentCampaignId}.json`);
-                renderAds(adsData);
-                lucide.createIcons();
-            } catch (error) {
-                console.error(error);
-                showToast("Falha ao alterar o status do Ad.", "error");
-                btn.innerHTML = originalHTML;
-                btn.disabled = false;
-                lucide.createIcons();
-            }
-        }
-
-        // Alternar Estado da Campanha Inteira
-        function setupCampaignPauseButton(campId) {
-            const btn = document.getElementById('btn-pause-campaign');
-            // Como padrão, faremos um botão dinâmico. Se você clica, pergunta se quer pausar ou ativar.
-            btn.innerHTML = `<i data-lucide="power"></i> Alternar Status (Play/Pause)`;
-            btn.className = "bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-lg flex items-center gap-2";
-            btn.onclick = async () => {
-                const action = confirm("Deseja PAUSAR a campanha? (OK para Pausar, Cancelar para tentar Ativar)");
-                const isPausedParam = action ? 1 : 0; // 1 = paused, 0 = active
-                
-                const originalHTML = btn.innerHTML;
-                btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Processando...`;
-                btn.disabled = true;
-                lucide.createIcons();
-
-                try {
-                    // endpoint: PUT /api/pauses/{campaignId}/campaigns/{isPaused}.json
-                    await tjCall(`api/pauses/${campId}/campaigns/${isPausedParam}.json`, 'PUT');
-                    showToast(`Ação concluída! A campanha foi ${isPausedParam ? 'Pausada' : 'Ativada'}.`, 'success');
-                } catch(error) {
-                    console.error(error);
-                    showToast("Erro ao processar a requisição da Campanha.", "error");
-                } finally {
-                    btn.innerHTML = originalHTML;
-                    btn.disabled = false;
-                    lucide.createIcons();
+                if(rows.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="4" class="py-20 text-center text-slate-500">Nenhum dado para hoje ainda.</td></tr>`;
+                    return;
                 }
-            };
+
+                tbody.innerHTML = rows.sort((a,b) => b.cost - a.cost).map(r => `
+                    <tr class="hover:bg-slate-900/50 transition-colors">
+                        <td class="px-6 py-5">
+                            <div class="flex flex-col">
+                                <span class="font-black text-slate-200 text-base tracking-tight">${r.campaign_name}</span>
+                                <span class="text-[10px] font-mono text-slate-500 uppercase mt-1 tracking-widest">ID: ${r.campaign_id} / ${r.campaign_type}</span>
+                            </div>
+                        </td>
+                        <td class="px-6 py-5">
+                            <span class="text-emerald-400 font-mono font-bold">${formatUSD(r.cost)}</span>
+                        </td>
+                        <td class="px-6 py-5 text-right">
+                            <div class="inline-flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
+                                <i data-lucide="zap" class="w-3 h-3 text-indigo-500"></i>
+                                <span class="text-xs font-black text-indigo-300 font-mono">${r.ctr}% CTR</span>
+                            </div>
+                        </td>
+                        <td class="px-6 py-5 text-center">
+                            <button onclick="openManageModal('${r.campaign_id}', '${r.campaign_name}')" class="bg-indigo-600/10 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-500/20 px-5 py-2 rounded-xl text-xs font-black transition-all">GERENCIAR</button>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                // Update stats cards
+                document.getElementById('stat-cost').innerText = formatUSD(rows.reduce((a,b) => a + parseFloat(b.cost), 0));
+                document.getElementById('stat-imp').innerText = formatNumber(rows.reduce((a,b) => a + parseInt(b.impressions), 0));
+                document.getElementById('stat-conv').innerText = rows.reduce((a,b) => a + parseInt(b.conversions || 0), 0);
+                lucide.createIcons();
+            } catch (e) { showToast("Falha na sincronização", "error"); }
         }
 
-        // Inicializar dashboard
-        window.onload = fetchTJData;
+        // GESTÃO PRO (MODAL)
+        async function openManageModal(id, name) {
+            currentCampId = id;
+            const modal = document.getElementById('manage-modal');
+            modal.classList.remove('hidden');
+            document.getElementById('modal-title').innerText = name;
+            document.getElementById('modal-id').innerText = `ID: ${id}`;
+            document.getElementById('modal-bids-body').innerHTML = `<tr><td colspan="3" class="p-6 text-center animate-pulse">Puxando Bids da API...</td></tr>`;
+
+            try {
+                // Puxamos lances da V1
+                const bids = await tjApi(`api/bids/${id}.json`);
+                const bidsBody = document.getElementById('modal-bids-body');
+                
+                if(!bids || bids.length === 0) {
+                    bidsBody.innerHTML = `<tr><td colspan="3" class="p-6 text-center text-slate-500">Sem lances específicos.</td></tr>`;
+                } else {
+                    bidsBody.innerHTML = bids.map(b => `
+                        <tr>
+                            <td class="px-4 py-3 font-mono text-slate-400">#${b.id} / ${b.spot_name || 'Global'}</td>
+                            <td class="px-4 py-3">
+                                <input type="number" step="0.001" id="bid-input-${b.id}" value="${b.bid}" class="bg-slate-900 border border-slate-800 rounded px-2 py-1 w-20 text-emerald-400 font-mono text-xs">
+                            </td>
+                            <td class="px-4 py-3">
+                                <button onclick="updateBid('${b.id}')" class="text-indigo-400 font-bold hover:underline">SALVAR</button>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+
+                // Injetar botão de Play/Pause baseado na lógica de status (V1)
+                const toggleContainer = document.getElementById('modal-status-toggle');
+                toggleContainer.innerHTML = `
+                    <button onclick="toggleCampaignStatus(1)" class="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 px-4 py-2 rounded-xl text-xs font-bold w-full transition-all">ATIVAR (PLAY)</button>
+                    <button onclick="toggleCampaignStatus(0)" class="bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 px-4 py-2 rounded-xl text-xs font-bold w-full transition-all">PAUSAR (STOP)</button>
+                `;
+
+            } catch (e) { showToast("Erro ao abrir gestão", "error"); }
+        }
+
+        async function updateBid(bidId) {
+            const val = document.getElementById(`bid-input-${bidId}`).value;
+            try {
+                await tjApi(`api/bids/${bidId}/set.json?bid=${val}`, 'PUT');
+                showToast("Bid atualizado com sucesso!");
+            } catch (e) { showToast("Erro ao salvar bid", "error"); }
+        }
+
+        async function toggleCampaignStatus(status) {
+            try {
+                // PUT /api/pauses/{campaignId}/campaigns/{isPaused}.json
+                // Conforme docs: 0 => paused, 1 => active
+                await tjApi(`api/pauses/${currentCampId}/campaigns/${status}.json`, 'PUT');
+                showToast(status ? "Campanha ATIVADA!" : "Campanha PAUSADA!");
+                fetchCampaignStats();
+            } catch (e) { showToast("Erro no servidor TJ", "error"); }
+        }
+
+        // BIBLIOTECA V2
+        async function fetchCreatives() {
+            const grid = document.getElementById('creatives-grid');
+            grid.innerHTML = `<div class="col-span-full py-20 text-center animate-spin"><i data-lucide="loader-2" class="w-10 h-10 mx-auto"></i></div>`;
+            lucide.createIcons();
+
+            try {
+                const res = await tjApi('api/v2/creatives');
+                const items = res.data || [];
+
+                if(items.length === 0) {
+                    grid.innerHTML = `<div class="col-span-full py-20 text-center text-slate-500">Nenhuma mídia encontrada.</div>`;
+                    return;
+                }
+
+                grid.innerHTML = items.map(c => `
+                    <div class="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl group">
+                        <div class="h-44 bg-slate-950 flex items-center justify-center relative">
+                            <img src="${c.creative_url}" class="w-full h-full object-cover opacity-40 group-hover:opacity-80 transition-opacity" onerror="this.src='https://placehold.co/400x300/0f172a/6366f1?text=Video+Media'">
+                            <span class="absolute top-4 right-4 text-[9px] font-black uppercase px-2.5 py-1 rounded-full border ${c.review_status === 'approved' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'}">
+                                ${c.review_status}
+                            </span>
+                        </div>
+                        <div class="p-5">
+                            <h4 class="font-bold text-sm truncate">${c.name}</h4>
+                            <div class="flex justify-between items-center mt-4">
+                                <span class="text-[10px] font-mono text-slate-500">ID: #${c.id}</span>
+                                <span class="text-[10px] font-black text-indigo-400 uppercase tracking-tighter bg-indigo-500/10 px-2 py-0.5 rounded">${c.media_type.replace(/_/g,' ')}</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                lucide.createIcons();
+            } catch (e) { showToast("Erro na biblioteca V2", "error"); }
+        }
+
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+        // START
+        window.onload = () => {
+            fetchMemberData();
+            fetchCampaignStats();
+        };
     </script>
 </body>
 </html>
