@@ -636,9 +636,9 @@
                     document.getElementById('fin-budget-left').innerText = formatUSD(parseFloat(data.daily_budget_left) || 0);
                     document.getElementById('fin-budget-total').innerText = formatUSD(parseFloat(data.daily_budget_total ?? data.daily_budget) || 0);
                 } else {
-                    // TF: GET /user
+                    // TF: GET /user — response envelopado em { result: {...} }
                     const data = await tfApi('user');
-                    const u = data?.data || data;
+                    const u = data?.result || data?.data || data;
                     const balance = parseFloat(u.balance ?? u.current_balance ?? u.account_balance) || 0;
                     document.getElementById('header-balance').innerText = formatUSD(balance);
                     document.getElementById('fin-balance').innerText = formatUSD(balance);
@@ -661,9 +661,9 @@
                     list.forEach(c => { if (c && c.id) campaignsCache[String(c.id)] = c; });
                     return campaignsCache;
                 } else {
-                    // TF: GET /campaigns
+                    // TF: GET /campaigns — envelope { result: [...], request_metadata: ... }
                     const data = await tfApi('campaigns?limit=500');
-                    const list = Array.isArray(data) ? data : (data.data || data.campaigns || []);
+                    const list = Array.isArray(data) ? data : (data.result || data.data || data.campaigns || []);
                     campaignsCache = {};
                     list.forEach(c => {
                         if (!c) return;
@@ -775,8 +775,9 @@
 
         function buildRowsFromStatsTF(stats) {
             // TF retorna array de objetos por campanha em /statistics/a/campaign
+            // Envelope típico: { result: [...], request_metadata: ... }
             const rows = [];
-            const list = Array.isArray(stats) ? stats : (stats?.data || stats?.results || []);
+            const list = Array.isArray(stats) ? stats : (stats?.result || stats?.data || stats?.results || []);
             list.forEach(s => {
                 if (!s) return;
                 const id = String(s.campaign_id ?? s.id ?? s.campaignId ?? '');
@@ -1547,8 +1548,9 @@
                         tfApi('library/file?limit=100'),
                         tfApi('library/html?limit=100')
                     ]);
-                    const files = filesR.status === 'fulfilled' ? (filesR.value?.data || filesR.value || []) : [];
-                    const htmls = htmlR.status === 'fulfilled' ? (htmlR.value?.data || htmlR.value || []) : [];
+                    const unwrap = (v) => v?.result || v?.data || v || [];
+                    const files = filesR.status === 'fulfilled' ? unwrap(filesR.value) : [];
+                    const htmls = htmlR.status === 'fulfilled' ? unwrap(htmlR.value) : [];
                     const all = [
                         ...(Array.isArray(files) ? files : []).map(f => ({ ...f, _kind: 'file' })),
                         ...(Array.isArray(htmls) ? htmls : []).map(f => ({ ...f, _kind: 'html' }))
