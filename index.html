@@ -11,7 +11,7 @@
 </head>
 <body class="bg-gray-950 text-gray-100 p-6 font-sans selection:bg-indigo-500/30 min-h-screen">
 
-    <div class="max-w-7xl mx-auto space-y-6">
+    <div class="max-w-[1400px] mx-auto space-y-6">
         
         <!-- Cabeçalho -->
         <header class="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-gray-800">
@@ -21,7 +21,7 @@
                     Traffic Monitor <span class="text-gray-500 font-light text-xl">| TJ Stats</span>
                 </h1>
                 <p class="text-sm text-gray-400 mt-1" id="subtitle-dates">
-                    Monitoramento direto da API da TrafficJunky
+                    Dashboard Avançado de Campanhas
                 </p>
             </div>
             <div class="mt-4 md:mt-0 flex flex-col md:flex-row items-end md:items-center gap-4">
@@ -33,7 +33,7 @@
                 <select 
                     id="date-filter" 
                     onchange="fetchTJData()"
-                    class="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none transition-colors"
+                    class="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none transition-colors font-medium"
                 >
                     <option value="today" selected>Hoje</option>
                     <option value="yesterday">Ontem</option>
@@ -44,7 +44,7 @@
                 <button 
                     onclick="fetchTJData()"
                     id="refresh-btn"
-                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50 shadow-lg shadow-indigo-900/20"
                 >
                     <i data-lucide="refresh-cw" id="refresh-icon" class="w-4 h-4"></i>
                     Atualizar Dados
@@ -53,14 +53,14 @@
         </header>
 
         <!-- Cards de Resumo -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-lg relative overflow-hidden">
                 <div class="flex justify-between items-start">
                     <div>
                         <p class="text-gray-400 text-sm font-medium mb-1">Investimento Total (USD)</p>
-                        <h3 id="total-cost" class="text-2xl font-bold text-white">$ 0,00</h3>
+                        <h3 id="total-cost" class="text-2xl font-bold text-emerald-400">$ 0,00</h3>
                     </div>
-                    <div class="p-2 bg-gray-800/80 rounded-lg">
+                    <div class="p-2 bg-gray-800/80 rounded-lg border border-gray-700">
                         <i data-lucide="dollar-sign" class="text-emerald-400 w-5 h-5"></i>
                     </div>
                 </div>
@@ -72,7 +72,7 @@
                         <p class="text-gray-400 text-sm font-medium mb-1">Total de Impressões</p>
                         <h3 id="total-impressions" class="text-2xl font-bold text-white">0</h3>
                     </div>
-                    <div class="p-2 bg-gray-800/80 rounded-lg">
+                    <div class="p-2 bg-gray-800/80 rounded-lg border border-gray-700">
                         <i data-lucide="eye" class="text-blue-400 w-5 h-5"></i>
                     </div>
                 </div>
@@ -84,32 +84,46 @@
                         <p class="text-gray-400 text-sm font-medium mb-1">Total de Cliques</p>
                         <h3 id="total-clicks" class="text-2xl font-bold text-white">0</h3>
                     </div>
-                    <div class="p-2 bg-gray-800/80 rounded-lg">
+                    <div class="p-2 bg-gray-800/80 rounded-lg border border-gray-700">
                         <i data-lucide="mouse-pointer-click" class="text-indigo-400 w-5 h-5"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-lg relative overflow-hidden">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-gray-400 text-sm font-medium mb-1">Conversões (TJ)</p>
+                        <h3 id="total-conversions" class="text-2xl font-bold text-white">0</h3>
+                    </div>
+                    <div class="p-2 bg-gray-800/80 rounded-lg border border-gray-700">
+                        <i data-lucide="target" class="text-orange-400 w-5 h-5"></i>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Tabela de Dados -->
+        <!-- Tabela de Dados Avançada -->
         <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden shadow-2xl">
-            <div class="p-5 border-b border-gray-800 bg-gray-900/50">
-                <h2 class="text-lg font-semibold text-gray-200">Métricas por Source / Campanha</h2>
+            <div class="p-5 border-b border-gray-800 bg-gray-900/50 flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-gray-200">Relatório Detalhado por Campanha</h2>
             </div>
             
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-sm whitespace-nowrap">
-                    <thead class="bg-gray-950/50 text-gray-400 uppercase tracking-wider text-xs">
+                    <thead class="bg-gray-950/80 text-gray-400 uppercase tracking-wider text-xs border-b border-gray-800">
                         <tr>
-                            <th class="px-6 py-4 font-medium">Campanha ID</th>
-                            <th class="px-6 py-4 font-medium">Investimento (USD)</th>
-                            <th class="px-6 py-4 font-medium text-right">Impressões</th>
-                            <th class="px-6 py-4 font-medium text-right">Cliques</th>
+                            <th class="px-6 py-4 font-medium">Campanha</th>
+                            <th class="px-6 py-4 font-medium">Investimento</th>
+                            <th class="px-6 py-4 font-medium text-right">Volume (Imp / Cliques)</th>
+                            <th class="px-6 py-4 font-medium text-right">Performance (CTR)</th>
+                            <th class="px-6 py-4 font-medium text-right">Custos (eCPM / eCPC)</th>
+                            <th class="px-6 py-4 font-medium text-center">Conversões</th>
                         </tr>
                     </thead>
                     <tbody id="table-body" class="divide-y divide-gray-800/50">
                         <tr>
-                            <td colspan="4" class="px-6 py-12 text-center text-gray-500">
+                            <td colspan="6" class="px-6 py-12 text-center text-gray-500">
                                 Inicializando o dashboard...
                             </td>
                         </tr>
@@ -125,7 +139,10 @@
 
         const TJ_TOKEN = '0a5cae844058508f0f70eee015ac6d3a8adfbd670fe1c60f7ac3c3f6f1b51fe975ce183c79f2ac31168cd7fed358165736c9b24fb65cf490f8fcd77549b20691';
 
+        // Formatadores
         const formatCurrency = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+        // eCPM e eCPC precisam de mais casas decimais
+        const formatMicroCurrency = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 3, maximumFractionDigits: 4 }).format(value);
         const formatNumber = (value) => new Intl.NumberFormat('pt-BR').format(value);
 
         function getDates() {
@@ -143,11 +160,7 @@
             }
 
             const formataData = (data) => data.toISOString().split('T')[0];
-            
-            return {
-                startDate: formataData(start),
-                endDate: formataData(end)
-            };
+            return { startDate: formataData(start), endDate: formataData(end) };
         }
 
         async function fetchTJData() {
@@ -157,14 +170,14 @@
             const subtitle = document.getElementById('subtitle-dates');
             
             const { startDate, endDate } = getDates();
-            subtitle.innerText = `Puxando métricas de ${startDate} até ${endDate}`;
+            subtitle.innerText = `Análise de tráfego de ${startDate} até ${endDate}`;
 
             const ENDPOINT_CORRETO = `api/campaigns/stats.json?start_date=${startDate}&end_date=${endDate}`;
             const TJ_API_URL = '/tj-proxy/' + ENDPOINT_CORRETO;
 
             btn.disabled = true;
             icon.classList.add('animate-spin');
-            tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">Buscando dados na TrafficJunky...</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-gray-500">Extraindo dados da TrafficJunky...</td></tr>`;
 
             try {
                 const response = await fetch(TJ_API_URL, {
@@ -176,17 +189,14 @@
                     }
                 });
 
-                if (!response.ok) {
-                    throw new Error(`Erro API: ${response.status}`);
-                }
+                if (!response.ok) throw new Error(`Erro API: ${response.status}`);
 
                 const data = await response.json();
-                console.log(`Dados crus recebidos:`, data);
                 renderData(data);
 
             } catch (error) {
                 console.error("Falha ao buscar dados:", error);
-                tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-red-500">Falha ao se conectar.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-red-500">Falha ao se conectar. Verifique o proxy.</td></tr>`;
             } finally {
                 btn.disabled = false;
                 icon.classList.remove('animate-spin');
@@ -197,17 +207,11 @@
             const tbody = document.getElementById('table-body');
             let dadosFinais = [];
 
-            // A MÁGICA ACONTECE AQUI: Lendo a estrutura { "ID": { stats... } }
             if (data && typeof data === 'object' && !Array.isArray(data)) {
-                // Pega todos os IDs de campanha (ex: "1013593201") e itera
                 Object.keys(data).forEach(idCampanha => {
                     const stats = data[idCampanha];
-                    // Garante que é um objeto válido de stats e não algo perdido na API
                     if (stats && typeof stats === 'object') {
-                        dadosFinais.push({
-                            campaign_id: idCampanha,
-                            ...stats
-                        });
+                        dadosFinais.push({ campaign_id_key: idCampanha, ...stats });
                     }
                 });
             } else if (Array.isArray(data)) {
@@ -215,49 +219,113 @@
             }
 
             if (dadosFinais.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">Nenhum investimento registrado neste período.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-gray-500">Nenhum investimento ou tráfego registrado neste período.</td></tr>`;
                 document.getElementById('total-cost').innerText = formatCurrency(0);
                 document.getElementById('total-impressions').innerText = formatNumber(0);
                 document.getElementById('total-clicks').innerText = formatNumber(0);
+                document.getElementById('total-conversions').innerText = formatNumber(0);
                 return;
             }
 
-            let totalCost = 0;
-            let totalImp = 0;
-            let totalClicks = 0;
+            // Ordenar por maior gasto
+            dadosFinais.sort((a, b) => parseFloat(b.cost || 0) - parseFloat(a.cost || 0));
+
+            let totalCost = 0, totalImp = 0, totalClicks = 0, totalConv = 0;
             let html = '';
 
             dadosFinais.forEach(row => {
-                // A API pode enviar o custo em nomes diferentes, tentamos vários:
-                const cost = parseFloat(row.cost || row.spent || row.amount || row.total_cost || 0);
-                const imp = parseInt(row.impressions || row.views || 0);
+                const cost = parseFloat(row.cost || 0);
+                const imp = parseInt(row.impressions || 0);
                 const clicks = parseInt(row.clicks || 0);
+                const conv = parseInt(row.conversions || 0);
+                
+                // Pegando os dados ricos que a API nos devolveu
+                const name = row.campaign_name || "Campanha Sem Nome";
+                const id = row.campaign_id || row.campaign_id_key;
+                const ctr = parseFloat(row.ctr || 0).toFixed(3); // A TJ já manda a %, ex: 0.084 -> 0.084%
+                const ecpm = parseFloat(row.ecpm || 0);
+                const ecpc = parseFloat(row.ecpc || 0);
+                const adsCount = row.ads_count || 0;
 
                 totalCost += cost;
                 totalImp += imp;
                 totalClicks += clicks;
+                totalConv += conv;
 
                 html += `
-                    <tr class="transition-colors hover:bg-gray-800/50">
-                        <td class="px-6 py-4 font-mono text-gray-300 font-bold">
-                            <span class="bg-indigo-900/40 text-indigo-300 px-2 py-1 rounded border border-indigo-500/20">
-                                ID: ${row.campaign_id}
+                    <tr class="transition-colors hover:bg-gray-800/40 group">
+                        
+                        <!-- Coluna 1: Campanha (Nome + ID + Ads) -->
+                        <td class="px-6 py-4">
+                            <div class="flex flex-col">
+                                <span class="font-bold text-gray-200 text-base">${name}</span>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <span class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded border border-gray-700 font-mono">
+                                        ID: ${id}
+                                    </span>
+                                    <span class="text-xs text-gray-500">
+                                        ${adsCount} Ads
+                                    </span>
+                                </div>
+                            </div>
+                        </td>
+
+                        <!-- Coluna 2: Investimento -->
+                        <td class="px-6 py-4">
+                            <span class="text-emerald-400 font-bold text-lg">${formatCurrency(cost)}</span>
+                        </td>
+
+                        <!-- Coluna 3: Volume (Impressões e Cliques) -->
+                        <td class="px-6 py-4 text-right">
+                            <div class="flex flex-col items-end">
+                                <span class="text-gray-300 font-medium flex items-center gap-1">
+                                    <i data-lucide="eye" class="w-3 h-3 text-gray-500"></i> ${formatNumber(imp)}
+                                </span>
+                                <span class="text-gray-400 text-sm flex items-center gap-1 mt-0.5">
+                                    <i data-lucide="mouse-pointer-click" class="w-3 h-3 text-gray-500"></i> ${formatNumber(clicks)}
+                                </span>
+                            </div>
+                        </td>
+
+                        <!-- Coluna 4: Performance (CTR) -->
+                        <td class="px-6 py-4 text-right">
+                            <span class="inline-flex items-center gap-1 font-bold ${ctr > 0.1 ? 'text-indigo-400' : 'text-gray-300'} bg-indigo-900/10 px-2.5 py-1 rounded-md border border-indigo-500/10">
+                                <i data-lucide="activity" class="w-3 h-3"></i> ${ctr}%
                             </span>
                         </td>
-                        <td class="px-6 py-4 text-emerald-400 font-medium">${formatCurrency(cost)}</td>
-                        <td class="px-6 py-4 text-right text-gray-300">${formatNumber(imp)}</td>
-                        <td class="px-6 py-4 text-right text-gray-300">${formatNumber(clicks)}</td>
+
+                        <!-- Coluna 5: Custos (eCPM e eCPC) -->
+                        <td class="px-6 py-4 text-right">
+                            <div class="flex flex-col items-end">
+                                <span class="text-gray-300 text-sm">
+                                    <span class="text-gray-500 text-xs mr-1">eCPM:</span>${formatMicroCurrency(ecpm)}
+                                </span>
+                                <span class="text-gray-400 text-xs mt-0.5">
+                                    <span class="text-gray-500 mr-1">eCPC:</span>${formatMicroCurrency(ecpc)}
+                                </span>
+                            </div>
+                        </td>
+
+                        <!-- Coluna 6: Conversões -->
+                        <td class="px-6 py-4 text-center">
+                            <span class="inline-flex items-center justify-center min-w-[2rem] px-2 py-1 rounded-full text-xs font-bold ${conv > 0 ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'bg-gray-800 text-gray-500'}">
+                                ${conv}
+                            </span>
+                        </td>
                     </tr>
                 `;
             });
 
-            // Se quisermos ordenar por gasto/investimento
-            // html.sort((a, b) => ...) // Opcional, mantive a ordem que vem da API
-
             tbody.innerHTML = html;
+            
+            // Recarregar os ícones gerados dinamicamente na tabela
+            lucide.createIcons();
+
+            // Atualizar Cards
             document.getElementById('total-cost').innerText = formatCurrency(totalCost);
             document.getElementById('total-impressions').innerText = formatNumber(totalImp);
             document.getElementById('total-clicks').innerText = formatNumber(totalClicks);
+            document.getElementById('total-conversions').innerText = formatNumber(totalConv);
         }
 
         window.onload = fetchTJData;
