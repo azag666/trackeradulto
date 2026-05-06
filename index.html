@@ -686,7 +686,8 @@
                     return campaignsCache;
                 } else {
                     // TF: GET /campaigns — envelope { result: [...], request_metadata: ... }
-                    const data = await tfApi('campaigns?limit=500&count=true&campaign_deleted=false');
+                    // count=true faz a API retornar só {count: N} sem o array. Não usar.
+                    const data = await tfApi('campaigns?limit=500&campaign_deleted=false');
                     console.log('[TF /campaigns raw]', data);
                     window.__lastTFCampaignsRaw = data;
                     const list = tfExtractArray(data, ['result.campaigns','result.data','result','data','campaigns']);
