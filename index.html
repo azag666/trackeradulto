@@ -433,6 +433,30 @@
         const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         const isPausedFlag = (v) => v === true || v === 1 || v === '1' || v === 'true';
 
+        // Extrai array de uma resposta TF tentando múltiplos caminhos.
+        // Aceita 'a.b.c' como path. Se nada bater, tenta achar QUALQUER array nas
+        // chaves top-level do objeto (último recurso).
+        function tfExtractArray(data, paths) {
+            if (Array.isArray(data)) return data;
+            if (!data || typeof data !== 'object') return [];
+            for (const p of paths) {
+                let cur = data, ok = true;
+                for (const part of p.split('.')) {
+                    if (cur && typeof cur === 'object' && part in cur) cur = cur[part];
+                    else { ok = false; break; }
+                }
+                if (ok && Array.isArray(cur)) return cur;
+            }
+            // Último recurso: pega o primeiro array encontrado em data ou data.result
+            const candidates = [data, data.result, data.data].filter(x => x && typeof x === 'object');
+            for (const c of candidates) {
+                for (const k of Object.keys(c)) {
+                    if (Array.isArray(c[k])) return c[k];
+                }
+            }
+            return [];
+        }
+
         function showToast(msg, type='success') {
             const c = document.getElementById('toast-container');
             const t = document.createElement('div');
@@ -663,7 +687,13 @@
                 } else {
                     // TF: GET /campaigns — envelope { result: [...], request_metadata: ... }
                     const data = await tfApi('campaigns?limit=500');
-                    const list = Array.isArray(data) ? data : (data.result || data.data || data.campaigns || []);
+                    console.log('[TF /campaigns raw]', data);
+                    const list = tfExtractArray(data, ['result.campaigns','result.data','result','data','campaigns']);
+                    if (!Array.isArray(list)) {
+                        console.warn('[TF /campaigns] estrutura inesperada:', data);
+                        showToast(`/campaigns retornou shape inesperado — vê console`, 'warn');
+                        return campaignsCache;
+                    }
                     campaignsCache = {};
                     list.forEach(c => {
                         if (!c) return;
@@ -776,8 +806,9 @@
         function buildRowsFromStatsTF(stats) {
             // TF retorna array de objetos por campanha em /statistics/a/campaign
             // Envelope típico: { result: [...], request_metadata: ... }
+            console.log('[TF /statistics/a/campaign raw]', stats);
             const rows = [];
-            const list = Array.isArray(stats) ? stats : (stats?.result || stats?.data || stats?.results || []);
+            const list = tfExtractArray(stats, ['result','data','results','result.campaigns']);
             list.forEach(s => {
                 if (!s) return;
                 const id = String(s.campaign_id ?? s.id ?? s.campaignId ?? '');
@@ -1548,9 +1579,10 @@
                         tfApi('library/file?limit=100'),
                         tfApi('library/html?limit=100')
                     ]);
-                    const unwrap = (v) => v?.result || v?.data || v || [];
-                    const files = filesR.status === 'fulfilled' ? unwrap(filesR.value) : [];
-                    const htmls = htmlR.status === 'fulfilled' ? unwrap(htmlR.value) : [];
+                    if (filesR.status === 'fulfilled') console.log('[TF /library/file raw]', filesR.value);
+                    if (htmlR.status === 'fulfilled') console.log('[TF /library/html raw]', htmlR.value);
+                    const files = filesR.status === 'fulfilled' ? tfExtractArray(filesR.value, ['result','data','result.files','files']) : [];
+                    const htmls = htmlR.status === 'fulfilled' ? tfExtractArray(htmlR.value, ['result','data','result.htmls','htmls']) : [];
                     const all = [
                         ...(Array.isArray(files) ? files : []).map(f => ({ ...f, _kind: 'file' })),
                         ...(Array.isArray(htmls) ? htmls : []).map(f => ({ ...f, _kind: 'html' }))
