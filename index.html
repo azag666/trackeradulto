@@ -30,7 +30,12 @@
         <div class="max-w-[1700px] mx-auto px-6 flex items-center justify-between h-16">
             <div class="flex items-center gap-3">
                 <div class="bg-indigo-600 p-1.5 rounded-lg"><i data-lucide="shield-check" class="text-white w-5 h-5"></i></div>
-                <span class="text-xl font-black tracking-tighter">TJ COMMANDER <span class="text-indigo-500 italic">PRO</span></span>
+                <span class="text-xl font-black tracking-tighter">TRAFFIC HUB <span class="text-indigo-500 italic">PRO</span></span>
+                <!-- Network Switcher -->
+                <div class="flex items-center bg-slate-950 border border-slate-800 rounded-full p-0.5 ml-2">
+                    <button onclick="setNetwork('tj')" id="net-tj" class="px-3 py-1 rounded-full text-[10px] font-black uppercase transition-all">TJ</button>
+                    <button onclick="setNetwork('tf')" id="net-tf" class="px-3 py-1 rounded-full text-[10px] font-black uppercase transition-all">TF</button>
+                </div>
             </div>
 
             <div class="flex h-full gap-1">
@@ -362,25 +367,29 @@
 
     <!-- MODAL TOKEN -->
     <div id="token-modal" class="fixed inset-0 bg-slate-950/95 z-[60] hidden justify-center items-center backdrop-blur-sm">
-        <div class="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden mx-4">
+        <div class="bg-slate-900 border border-slate-700 w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden mx-4">
             <div class="p-6 border-b border-slate-800 bg-slate-900/80 flex justify-between items-center">
                 <div class="flex items-center gap-3">
                     <div class="bg-indigo-600 p-2 rounded-lg"><i data-lucide="key-round" class="text-white w-5 h-5"></i></div>
                     <div>
-                        <h2 class="text-lg font-black text-white">Token da API TrafficJunky</h2>
-                        <span class="text-xs text-slate-500">Salvo em localStorage do seu navegador</span>
+                        <h2 class="text-lg font-black text-white">Tokens das APIs</h2>
+                        <span class="text-xs text-slate-500">Salvos em localStorage do seu navegador (nunca enviados pra terceiros)</span>
                     </div>
                 </div>
                 <button onclick="closeModal('token-modal')" class="text-slate-400 hover:text-white"><i data-lucide="x-circle" class="w-7 h-7"></i></button>
             </div>
-            <form class="p-6 space-y-4" onsubmit="saveToken(event)">
+            <form class="p-6 space-y-5" onsubmit="saveToken(event)">
                 <div>
-                    <label class="text-[10px] font-black text-slate-500 uppercase mb-1 block">Token (Bearer)</label>
-                    <textarea id="token-input" rows="4" placeholder="Cole o token aqui..." class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 w-full text-white outline-none focus:border-indigo-500 font-mono text-xs break-all resize-none"></textarea>
-                    <p class="text-[10px] text-slate-600 mt-1.5 leading-relaxed">O token fica armazenado <strong>apenas no seu navegador</strong> (localStorage). Não é enviado pra nenhum servidor além da própria API da TrafficJunky via proxy Netlify.</p>
+                    <label class="text-[10px] font-black text-indigo-400 uppercase mb-1 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-indigo-500"></span> TrafficJunky · Bearer Token</label>
+                    <textarea id="token-input-tj" rows="3" placeholder="Cole o token TJ aqui..." class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 w-full text-white outline-none focus:border-indigo-500 font-mono text-xs break-all resize-none"></textarea>
                 </div>
-                <div class="flex gap-2 justify-between items-center">
-                    <button type="button" onclick="clearToken()" class="text-xs text-red-400 hover:text-red-300 font-bold flex items-center gap-1.5"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Limpar</button>
+                <div>
+                    <label class="text-[10px] font-black text-fuchsia-400 uppercase mb-1 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-fuchsia-500"></span> Traffic Factory V2 · API Key</label>
+                    <textarea id="token-input-tf" rows="3" placeholder="Cole o token TF aqui (gere em Settings → API Tokens)..." class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 w-full text-white outline-none focus:border-fuchsia-500 font-mono text-xs break-all resize-none"></textarea>
+                    <p class="text-[10px] text-slate-600 mt-1">Header esperado pela API: <code class="text-slate-400">Authorization: &lt;sua_api_key&gt;</code></p>
+                </div>
+                <div class="flex gap-2 justify-between items-center pt-2">
+                    <button type="button" onclick="clearToken()" class="text-xs text-red-400 hover:text-red-300 font-bold flex items-center gap-1.5"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Limpar tudo</button>
                     <div class="flex gap-2">
                         <button type="button" onclick="closeModal('token-modal')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-5 py-2 rounded-lg text-xs font-bold">CANCELAR</button>
                         <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-lg text-xs font-bold flex items-center gap-2">
@@ -399,6 +408,8 @@
         // CONFIG / STATE
         // ============================================================
         let TJ_TOKEN = localStorage.getItem('tj_token') || '';
+        let TF_TOKEN = localStorage.getItem('tf_token') || '';
+        let activeNetwork = localStorage.getItem('active_network') || 'tj'; // 'tj' | 'tf'
         let currentCampId = null;
         let currentCampName = null;
         let campaignsCache = {}; // id -> {name, type, daily_budget, paused, ...}
@@ -435,9 +446,10 @@
         function closeModal(id) { const m = document.getElementById(id); m.classList.add('hidden'); m.classList.remove('flex'); }
 
         // ============================================================
-        // API CLIENT
+        // API CLIENT (network-aware)
         // ============================================================
         async function tjApi(endpoint, method='GET', body=null) {
+            // Compatibilidade com chamadas TJ específicas (legado).
             if (!TJ_TOKEN) throw new Error('Token TJ ausente');
             const opts = { method, headers: { 'Authorization': `Bearer ${TJ_TOKEN}`, 'Accept': 'application/json' } };
             if (body instanceof FormData) opts.body = body;
@@ -446,6 +458,25 @@
             const text = await res.text();
             if (!res.ok) throw new Error(`${res.status}: ${text.slice(0,200)}`);
             try { return text ? JSON.parse(text) : { success: true }; } catch { return { raw: text }; }
+        }
+
+        async function tfApi(endpoint, method='GET', body=null) {
+            // Traffic Factory V2 — base /tf-proxy/ → https://api.trafficfactory.com/v2/
+            // Auth: header `Authorization: <token>` (apiKey, sem prefixo Bearer)
+            if (!TF_TOKEN) throw new Error('Token TF ausente');
+            const opts = { method, headers: { 'Authorization': TF_TOKEN, 'Accept': 'application/json' } };
+            if (body instanceof FormData) opts.body = body;
+            else if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+            const res = await fetch(`/tf-proxy/${endpoint}`, opts);
+            const text = await res.text();
+            if (!res.ok) throw new Error(`${res.status}: ${text.slice(0,200)}`);
+            try { return text ? JSON.parse(text) : { success: true }; } catch { return { raw: text }; }
+        }
+
+        // Adapter unificado: roteia conforme rede ativa
+        async function apiCall(tjEndpoint, tfEndpoint, opts={}) {
+            if (activeNetwork === 'tf') return tfApi(tfEndpoint, opts.method || 'GET', opts.body);
+            return tjApi(tjEndpoint, opts.method || 'GET', opts.body);
         }
 
         // ============================================================
@@ -489,16 +520,62 @@
         }
 
         // ============================================================
+        // NETWORK SWITCHER
+        // ============================================================
+        function setNetwork(net) {
+            activeNetwork = net;
+            localStorage.setItem('active_network', net);
+            updateNetworkUI();
+            // Reset caches e refetch
+            campaignsCache = {};
+            currentStats = {};
+            allRows = [];
+            const tokenOk = (net === 'tj' && TJ_TOKEN) || (net === 'tf' && TF_TOKEN);
+            if (!tokenOk) { openTokenModal(); showToast(`Cole o token ${net.toUpperCase()} pra começar`, 'warn'); return; }
+            fetchMemberData();
+            fetchCampaignsList().then(() => fetchCampaignStats());
+        }
+
+        function updateNetworkUI() {
+            const tj = document.getElementById('net-tj');
+            const tf = document.getElementById('net-tf');
+            if (activeNetwork === 'tj') {
+                tj.className = 'px-3 py-1 rounded-full text-[10px] font-black uppercase transition-all bg-indigo-600 text-white';
+                tf.className = 'px-3 py-1 rounded-full text-[10px] font-black uppercase transition-all text-slate-500';
+            } else {
+                tj.className = 'px-3 py-1 rounded-full text-[10px] font-black uppercase transition-all text-slate-500';
+                tf.className = 'px-3 py-1 rounded-full text-[10px] font-black uppercase transition-all bg-fuchsia-600 text-white';
+            }
+            // Adapter UI: bids/spots só fazem sentido em TJ
+            const subtabBids = document.getElementById('subtab-bids');
+            const subtabSpots = document.getElementById('subtab-spots');
+            if (subtabBids) subtabBids.style.display = activeNetwork === 'tj' ? '' : 'none';
+            if (subtabSpots) subtabSpots.style.display = activeNetwork === 'tj' ? '' : 'none';
+        }
+
+        // ============================================================
         // MEMBER
         // ============================================================
         async function fetchMemberData() {
             try {
-                const data = await tjApi('api/member.json');
-                document.getElementById('header-balance').innerText = formatUSD(safeNum(data.current_balance));
-                document.getElementById('header-budget').innerText = formatUSD(safeNum(data.daily_budget_left));
-                document.getElementById('fin-balance').innerText = formatUSD(safeNum(data.current_balance));
-                document.getElementById('fin-budget-left').innerText = formatUSD(safeNum(data.daily_budget_left));
-                document.getElementById('fin-budget-total').innerText = formatUSD(safeNum(data.daily_budget_total ?? data.daily_budget));
+                if (activeNetwork === 'tj') {
+                    const data = await tjApi('api/member.json');
+                    document.getElementById('header-balance').innerText = formatUSD(parseFloat(data.current_balance) || 0);
+                    document.getElementById('header-budget').innerText = formatUSD(parseFloat(data.daily_budget_left) || 0);
+                    document.getElementById('fin-balance').innerText = formatUSD(parseFloat(data.current_balance) || 0);
+                    document.getElementById('fin-budget-left').innerText = formatUSD(parseFloat(data.daily_budget_left) || 0);
+                    document.getElementById('fin-budget-total').innerText = formatUSD(parseFloat(data.daily_budget_total ?? data.daily_budget) || 0);
+                } else {
+                    // TF: GET /user
+                    const data = await tfApi('user');
+                    const u = data?.data || data;
+                    const balance = parseFloat(u.balance ?? u.current_balance ?? u.account_balance) || 0;
+                    document.getElementById('header-balance').innerText = formatUSD(balance);
+                    document.getElementById('fin-balance').innerText = formatUSD(balance);
+                    document.getElementById('header-budget').innerText = '—';
+                    document.getElementById('fin-budget-left').innerText = '—';
+                    document.getElementById('fin-budget-total').innerText = '—';
+                }
             } catch (e) { showToast('Erro saldo: '+e.message, 'error'); }
         }
 
@@ -507,11 +584,35 @@
         // ============================================================
         async function fetchCampaignsList() {
             try {
-                const data = await tjApi('api/campaigns.json');
-                const list = Array.isArray(data) ? data : (data.data || data.campaigns || Object.values(data || {}));
-                campaignsCache = {};
-                list.forEach(c => { if (c && c.id) campaignsCache[String(c.id)] = c; });
-                return campaignsCache;
+                if (activeNetwork === 'tj') {
+                    const data = await tjApi('api/campaigns.json');
+                    const list = Array.isArray(data) ? data : (data.data || data.campaigns || Object.values(data || {}));
+                    campaignsCache = {};
+                    list.forEach(c => { if (c && c.id) campaignsCache[String(c.id)] = c; });
+                    return campaignsCache;
+                } else {
+                    // TF: GET /campaigns
+                    const data = await tfApi('campaigns?limit=500');
+                    const list = Array.isArray(data) ? data : (data.data || data.campaigns || []);
+                    campaignsCache = {};
+                    list.forEach(c => {
+                        if (!c) return;
+                        const id = String(c.id);
+                        // Normaliza pra mesmo shape do TJ usado no resto do código
+                        campaignsCache[id] = {
+                            id: c.id,
+                            name: c.name,
+                            description: c.description,
+                            daily_budget: parseFloat(c.daily_budget) || 0,
+                            paused: c.status === 'paused' || c.status === 'PAUSED' || c.is_paused === true,
+                            campaign_type: c.type || c.campaign_type,
+                            start_date: c.start_date,
+                            end_date: c.end_date,
+                            _raw: c
+                        };
+                    });
+                    return campaignsCache;
+                }
             } catch (e) {
                 showToast('Erro listar campanhas: '+e.message, 'error');
                 return {};
@@ -531,12 +632,20 @@
             const startDate = startInput.value, endDate = endInput.value;
 
             try {
-                const [stats] = await Promise.all([
-                    tjApi(`api/campaigns/stats.json?start_date=${startDate}&end_date=${endDate}`),
-                    Object.keys(campaignsCache).length === 0 ? fetchCampaignsList() : Promise.resolve(campaignsCache)
-                ]);
-                currentStats = stats;
-                allRows = buildRowsFromStats(stats);
+                if (activeNetwork === 'tj') {
+                    const [stats] = await Promise.all([
+                        tjApi(`api/campaigns/stats.json?start_date=${startDate}&end_date=${endDate}`),
+                        Object.keys(campaignsCache).length === 0 ? fetchCampaignsList() : Promise.resolve(campaignsCache)
+                    ]);
+                    currentStats = stats;
+                    allRows = buildRowsFromStats(stats);
+                } else {
+                    // TF: /statistics/a/campaign?from=&to=
+                    if (Object.keys(campaignsCache).length === 0) await fetchCampaignsList();
+                    const stats = await tfApi(`statistics/a/campaign?from=${startDate}&to=${endDate}`);
+                    currentStats = stats;
+                    allRows = buildRowsFromStatsTF(stats);
+                }
                 renderDashTable();
                 renderKpis();
             } catch (e) {
@@ -590,6 +699,57 @@
             // Adicionar campanhas conhecidas que não vieram em stats (com zeros)
             Object.values(campaignsCache).forEach(c => {
                 if (!rows.find(r => r.id === String(c.id))) rows.push(normalizeRow(c.id, {}));
+            });
+            return rows;
+        }
+
+        function buildRowsFromStatsTF(stats) {
+            // TF retorna array de objetos por campanha em /statistics/a/campaign
+            const rows = [];
+            const list = Array.isArray(stats) ? stats : (stats?.data || stats?.results || []);
+            list.forEach(s => {
+                if (!s) return;
+                const id = String(s.campaign_id ?? s.id ?? s.campaignId ?? '');
+                if (!id) return;
+                const cached = campaignsCache[id] || {};
+                const cost = parseFloat(s.cost ?? s.spend ?? s.spent) || 0;
+                const impressions = parseInt(s.impressions ?? s.imp) || 0;
+                const clicks = parseInt(s.clicks) || 0;
+                const conversions = parseInt(s.conversions ?? s.convs) || 0;
+                rows.push({
+                    id,
+                    name: safeStr(cached.name || s.campaign_name || s.name, `Campaign #${id}`),
+                    type: safeStr(cached.campaign_type || s.campaign_type || s.type, '—'),
+                    cost, impressions, clicks,
+                    plays: parseInt(s.plays ?? s.video_views) || 0,
+                    skips: parseInt(s.skips) || 0,
+                    completed: parseInt(s.completed) || 0,
+                    conversions,
+                    ctr: impressions > 0 ? (clicks / impressions) * 100 : (parseFloat(s.ctr) || 0),
+                    ecpm: impressions > 0 ? (cost / impressions) * 1000 : (parseFloat(s.ecpm) || 0),
+                    ecpc: clicks > 0 ? (cost / clicks) : (parseFloat(s.ecpc) || 0),
+                    iframes: parseInt(s.iframes) || 0,
+                    paused: cached.paused,
+                    daily_budget: parseFloat(cached.daily_budget) || 0,
+                    start_date: cached.start_date,
+                    end_date: cached.end_date,
+                    description: cached.description || ''
+                });
+            });
+            // Adiciona campanhas conhecidas que não vieram em stats (com zeros)
+            Object.values(campaignsCache).forEach(c => {
+                if (!rows.find(r => r.id === String(c.id))) {
+                    rows.push({
+                        id: String(c.id),
+                        name: safeStr(c.name, `Campaign #${c.id}`),
+                        type: safeStr(c.campaign_type, '—'),
+                        cost: 0, impressions: 0, clicks: 0, plays: 0, skips: 0, completed: 0, conversions: 0,
+                        ctr: 0, ecpm: 0, ecpc: 0, iframes: 0,
+                        paused: c.paused,
+                        daily_budget: parseFloat(c.daily_budget) || 0,
+                        start_date: c.start_date, end_date: c.end_date, description: c.description || ''
+                    });
+                }
             });
             return rows;
         }
@@ -682,8 +842,15 @@
         }
 
         async function quickToggle(id, status) {
+            // status: 1 = ativar, 0 = pausar
             try {
-                await tjApi(`api/pauses/${id}/campaigns/${status}.json`, 'PUT');
+                if (activeNetwork === 'tj') {
+                    await tjApi(`api/pauses/${id}/campaigns/${status}.json`, 'PUT');
+                } else {
+                    // TF: bulk endpoint, body { ids: [id] }
+                    const path = status === 1 ? 'campaigns/play' : 'campaigns/pause';
+                    await tfApi(path, 'PUT', { ids: [parseInt(id)] });
+                }
                 showToast(status===1 ? 'Ativada' : 'Pausada');
                 if (campaignsCache[id]) campaignsCache[id].paused = (status === 0);
                 const r = allRows.find(x => x.id === String(id));
@@ -747,7 +914,12 @@
         async function toggleCampaignStatus(status) {
             if (!currentCampId) return;
             try {
-                await tjApi(`api/pauses/${currentCampId}/campaigns/${status}.json`, 'PUT');
+                if (activeNetwork === 'tj') {
+                    await tjApi(`api/pauses/${currentCampId}/campaigns/${status}.json`, 'PUT');
+                } else {
+                    const path = status === 1 ? 'campaigns/play' : 'campaigns/pause';
+                    await tfApi(path, 'PUT', { ids: [parseInt(currentCampId)] });
+                }
                 showToast(status===1 ? 'Campanha ATIVADA' : 'Campanha PAUSADA');
                 renderStatusToggle(status === 0);
                 if (campaignsCache[currentCampId]) campaignsCache[currentCampId].paused = (status === 0);
@@ -760,11 +932,15 @@
 
         async function updateCampaignBudget() {
             if (!currentCampId) return;
-            const val = safeNum(document.getElementById('input-budget').value);
+            const val = parseFloat(document.getElementById('input-budget').value) || 0;
             if (val < 0) return showToast('Budget inválido', 'warn');
             try {
-                // Endpoint correto: PUT /api/campaigns/{id}.json?dailyBudget=X
-                await tjApi(`api/campaigns/${currentCampId}.json?dailyBudget=${val}`, 'PUT');
+                if (activeNetwork === 'tj') {
+                    await tjApi(`api/campaigns/${currentCampId}.json?dailyBudget=${val}`, 'PUT');
+                } else {
+                    // TF: PUT /campaigns/{id} body { daily_budget: X }
+                    await tfApi(`campaigns/${currentCampId}`, 'PUT', { daily_budget: val });
+                }
                 showToast(`Budget atualizado: ${formatUSD(val)}`);
                 if (campaignsCache[currentCampId]) campaignsCache[currentCampId].daily_budget = val;
                 const r = allRows.find(x => x.id === currentCampId);
@@ -775,18 +951,28 @@
 
         async function updateCampaignFields() {
             if (!currentCampId) return;
-            const params = new URLSearchParams();
             const name = document.getElementById('edit-name').value.trim();
             const desc = document.getElementById('edit-desc').value.trim();
             const sd = document.getElementById('edit-start').value;
             const ed = document.getElementById('edit-end').value;
-            if (name) params.set('name', name);
-            if (desc) params.set('description', desc);
-            if (sd) params.set('startDate', sd);
-            if (ed) params.set('endDate', ed);
-            if ([...params].length === 0) return showToast('Nada pra salvar', 'warn');
             try {
-                await tjApi(`api/campaigns/${currentCampId}.json?${params.toString()}`, 'PUT');
+                if (activeNetwork === 'tj') {
+                    const params = new URLSearchParams();
+                    if (name) params.set('name', name);
+                    if (desc) params.set('description', desc);
+                    if (sd) params.set('startDate', sd);
+                    if (ed) params.set('endDate', ed);
+                    if ([...params].length === 0) return showToast('Nada pra salvar', 'warn');
+                    await tjApi(`api/campaigns/${currentCampId}.json?${params.toString()}`, 'PUT');
+                } else {
+                    const body = {};
+                    if (name) body.name = name;
+                    if (desc) body.description = desc;
+                    if (sd) body.start_date = sd;
+                    if (ed) body.end_date = ed;
+                    if (Object.keys(body).length === 0) return showToast('Nada pra salvar', 'warn');
+                    await tfApi(`campaigns/${currentCampId}`, 'PUT', body);
+                }
                 showToast('Campanha atualizada');
                 Object.assign(campaignsCache[currentCampId] || {}, { name, description: desc, start_date: sd, end_date: ed });
                 fetchCampaignStats();
@@ -1281,6 +1467,35 @@
         async function fetchCreatives() {
             const grid = document.getElementById('creatives-grid');
             const camp = document.getElementById('creatives-camp-filter').value;
+
+            // === TF: ignora seletor de campanha; lista a biblioteca global ===
+            if (activeNetwork === 'tf') {
+                grid.innerHTML = `<div class="col-span-full py-20 text-center"><i data-lucide="loader-2" class="animate-spin w-10 h-10 mx-auto text-fuchsia-500"></i></div>`;
+                lucide.createIcons();
+                try {
+                    const [filesR, htmlR] = await Promise.allSettled([
+                        tfApi('library/file?limit=100'),
+                        tfApi('library/html?limit=100')
+                    ]);
+                    const files = filesR.status === 'fulfilled' ? (filesR.value?.data || filesR.value || []) : [];
+                    const htmls = htmlR.status === 'fulfilled' ? (htmlR.value?.data || htmlR.value || []) : [];
+                    const all = [
+                        ...(Array.isArray(files) ? files : []).map(f => ({ ...f, _kind: 'file' })),
+                        ...(Array.isArray(htmls) ? htmls : []).map(f => ({ ...f, _kind: 'html' }))
+                    ];
+                    if (all.length === 0) {
+                        grid.innerHTML = `<div class="col-span-full py-20 text-center text-slate-500">Biblioteca TF vazia ou sem permissão.</div>`;
+                        return;
+                    }
+                    grid.innerHTML = all.map(c => renderTFLibraryCard(c)).join('');
+                    lucide.createIcons();
+                } catch (e) {
+                    grid.innerHTML = `<div class="col-span-full py-20 text-center text-red-400">Erro: ${escapeHtml(e.message)}</div>`;
+                }
+                return;
+            }
+
+            // === TJ (atual) ===
             if (!camp || camp === 'Carregando campanhas...') {
                 grid.innerHTML = `<div class="col-span-full py-20 text-center text-slate-500">Selecione uma campanha pra listar os criativos.<br><span class="text-[10px] text-slate-600 mt-2 block">Ou escolha "Todas" pra carregar todos os ads de uma vez.</span></div>`;
                 return;
@@ -1335,6 +1550,30 @@
             }
         }
 
+        function renderTFLibraryCard(c) {
+            const id = safeStr(c.id ?? c.id_file ?? c.id_html, '?');
+            const name = safeStr(c.name || c.filename || c.title, `Asset #${id}`);
+            const url = safeStr(c.url || c.preview_url || c.thumbnail_url || c.file_url, '');
+            const kind = c._kind || 'file';
+            const tags = Array.isArray(c.user_tags) ? c.user_tags.join(', ') : (c.user_tags || '');
+            const archived = c.archived === true || c.is_archived === true;
+            return `
+                <div class="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden flex flex-col">
+                    <div class="h-40 bg-slate-900 relative">
+                        ${url
+                            ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img src="${escapeHtml(url)}" class="w-full h-full object-contain bg-slate-950 opacity-90 hover:opacity-100 transition-opacity" loading="lazy" onerror="this.parentElement.innerHTML='<div class=&quot;w-full h-full flex items-center justify-center text-slate-700&quot;><svg width=&quot;28&quot; height=&quot;28&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;2&quot;><rect x=&quot;3&quot; y=&quot;3&quot; width=&quot;18&quot; height=&quot;18&quot; rx=&quot;2&quot;/></svg></div>'"></a>`
+                            : `<div class="w-full h-full flex items-center justify-center text-slate-700"><i data-lucide="${kind === 'html' ? 'code-2' : 'image'}" class="w-10 h-10"></i></div>`}
+                        <span class="absolute top-2 left-2 inline-flex items-center gap-1.5 bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 px-2 py-1 rounded-full text-[10px] font-bold uppercase">${kind === 'html' ? 'HTML5' : 'FILE'}</span>
+                        ${archived ? `<span class="absolute top-2 right-2 bg-slate-800 text-slate-400 text-[9px] font-black uppercase px-2 py-1 rounded">arquivado</span>` : ''}
+                    </div>
+                    <div class="p-3 space-y-2 flex-1 flex flex-col">
+                        <h4 class="font-bold text-sm truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</h4>
+                        ${tags ? `<div class="text-[10px] text-slate-500 truncate">${escapeHtml(tags)}</div>` : ''}
+                        <div class="text-[10px] font-mono text-slate-600 mt-auto pt-2 border-t border-slate-800">ID: #${id}</div>
+                    </div>
+                </div>`;
+        }
+
         function renderAdCardWithCamp(a, stats, camp) {
             const base = renderAdCard(a, stats);
             const campName = escapeHtml(safeStr(camp?.name || camp?.campaign_name, 'Campanha #' + (a.campaign_id || '?')));
@@ -1348,34 +1587,44 @@
         // TOKEN UI
         // ============================================================
         function openTokenModal() {
-            document.getElementById('token-input').value = TJ_TOKEN || '';
+            document.getElementById('token-input-tj').value = TJ_TOKEN || '';
+            document.getElementById('token-input-tf').value = TF_TOKEN || '';
             openModal('token-modal');
         }
         function saveToken(ev) {
             ev.preventDefault();
-            const val = (document.getElementById('token-input').value || '').trim();
-            if (!val) return showToast('Cole um token', 'warn');
-            localStorage.setItem('tj_token', val);
-            TJ_TOKEN = val;
+            const tj = (document.getElementById('token-input-tj').value || '').trim();
+            const tf = (document.getElementById('token-input-tf').value || '').trim();
+            if (!tj && !tf) return showToast('Cole pelo menos um token', 'warn');
+            if (tj) { localStorage.setItem('tj_token', tj); TJ_TOKEN = tj; }
+            else { localStorage.removeItem('tj_token'); TJ_TOKEN = ''; }
+            if (tf) { localStorage.setItem('tf_token', tf); TF_TOKEN = tf; }
+            else { localStorage.removeItem('tf_token'); TF_TOKEN = ''; }
             closeModal('token-modal');
-            showToast('Token salvo. Carregando...');
+            showToast('Tokens salvos. Carregando...');
             campaignsCache = {};
+            currentStats = {};
+            allRows = [];
             fetchMemberData();
             fetchCampaignsList().then(() => fetchCampaignStats());
         }
         function clearToken() {
-            if (!confirm('Apagar token salvo neste navegador?')) return;
+            if (!confirm('Apagar AMBOS tokens salvos neste navegador?')) return;
             localStorage.removeItem('tj_token');
+            localStorage.removeItem('tf_token');
             TJ_TOKEN = '';
-            document.getElementById('token-input').value = '';
-            showToast('Token removido', 'warn');
+            TF_TOKEN = '';
+            document.getElementById('token-input-tj').value = '';
+            document.getElementById('token-input-tf').value = '';
+            showToast('Tokens removidos', 'warn');
         }
 
         // ============================================================
         // BOOT
         // ============================================================
+        function activeToken() { return activeNetwork === 'tf' ? TF_TOKEN : TJ_TOKEN; }
         function refreshAll() {
-            if (!TJ_TOKEN) return openTokenModal();
+            if (!activeToken()) return openTokenModal();
             fetchMemberData();
             fetchCampaignStats();
         }
@@ -1383,9 +1632,10 @@
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('filter-start').value = today;
             document.getElementById('filter-end').value = today;
-            if (!TJ_TOKEN) {
+            updateNetworkUI();
+            if (!activeToken()) {
                 openTokenModal();
-                showToast('Cole o token da TrafficJunky pra começar', 'warn');
+                showToast(`Cole o token ${activeNetwork.toUpperCase()} pra começar`, 'warn');
                 return;
             }
             fetchMemberData();

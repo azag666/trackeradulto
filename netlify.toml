@@ -3,3 +3,9 @@
   to = "https://api.trafficjunky.com/:splat"
   status = 200
   force = true
+
+[[redirects]]
+  from = "/tf-proxy/*"
+  to = "https://api.trafficfactory.com/v2/:splat"
+  status = 200
+  force = true
